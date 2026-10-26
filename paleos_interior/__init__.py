@@ -5,3 +5,8 @@ adiabat, with material properties interpolated from the PALEOS lookup tables.
 """
 
 __version__ = '0.1.0'
+
+from .structure import NoSolutionError, integrate
+from .tables import load_tables
+
+__all__ = ['NoSolutionError', 'integrate', 'load_tables']
