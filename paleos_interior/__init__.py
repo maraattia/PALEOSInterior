@@ -7,14 +7,17 @@ adiabat, with material properties interpolated from the PALEOS lookup tables.
 __version__ = '0.1.0'
 
 from .line import CompatibleLine, compatible_envelope, compatible_line
+from .result import InteriorResult, interior_profiles
 from .structure import NoSolutionError, integrate
 from .tables import load_tables
 
 __all__ = [
     'CompatibleLine',
+    'InteriorResult',
     'NoSolutionError',
     'compatible_envelope',
     'compatible_line',
     'integrate',
+    'interior_profiles',
     'load_tables',
 ]
