@@ -6,6 +6,7 @@ potential temperature, so a measured radius picks out a line in (T_pot, CMF).
 
 import itertools
 import math
+import warnings
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -46,7 +47,9 @@ class CompatibleLine:
 
     Arrays hold the solvable points only, including the ends of the solvable
     T_pot interval when it is narrower than the requested range. ``rejected``
-    lists the requested T_pot values without a solution and the reason.
+    lists the requested T_pot values without a solution as (T_pot, reason,
+    R_limit), where R_limit (m) is the radius of the pure MgSiO3 or pure iron
+    planet that bounds the rocky radii at that T_pot.
     """
 
     mass: float
@@ -157,7 +160,11 @@ def _trace(mass, radius, T_pot, dT_cmb, n_line, tables):
     T_line = np.array([p[0] for p in points])
     cmf_line = np.array([p[1] for p in points])
     cmb = np.array([_cmb(radius_map, c, T) for T, c in points]).reshape(-1, 3)
-    rejected = [(T, why) for T, c, why in nodes if c is None]
+    rejected = [
+        (T, why, radius_map(0.0 if why == TOO_LARGE else 1.0, T))
+        for T, c, why in nodes
+        if c is None
+    ]
     return CompatibleLine(
         mass=M, radius=R_obs, dT_cmb=dT_cmb, T_requested=(T_min, T_max),
         T_pot=T_line, cmf=cmf_line, R_cmb=cmb[:, 0], P_cmb=cmb[:, 1],
@@ -176,14 +183,48 @@ def compatible_line(mass, radius, T_pot, dT_cmb=0.0, n_line=12, tables=None):
     tables = tables or load_tables()
     line = _trace(mass, radius, T_pot, dT_cmb, n_line, tables)
     if not line.solvable:
-        reasons = sorted({why for _, why in line.rejected})
-        raise NoSolutionError(
-            f'No Fe-MgSiO3 planet of {mass} Earth masses has a radius of {radius} '
-            f'Earth radii for T_pot in {line.T_requested} K: the planet is '
-            + ' or '.join(reasons)
-            + ' at every T_pot.'
+        raise NoSolutionError(_rejection_message(line, n_line))
+    if line.rejected:
+        lo, hi = line.T_range
+        warnings.warn(
+            f'{_rejection_message(line, n_line)} The line covers only T_pot from '
+            f'{lo:.0f} to {hi:.0f} K.',
+            stacklevel=2,
         )
     return line
+
+
+def _rejection_message(line, n_line):
+    """Explain the T_pot values without a rocky solution in physical terms."""
+    lo, hi = line.T_requested
+    head = (
+        f'For M = {line.mass / M_EARTH:.4g} Earth masses and R = '
+        f'{line.radius / R_EARTH:.4f} Earth radii, {len(line.rejected)} of the '
+        f'{n_line} T_pot values solved from {lo:.0f} to {hi:.0f} K have no Fe-MgSiO3 '
+        'solution.'
+    )
+    parts = [head]
+    too_large = [x for x in line.rejected if x[1] == TOO_LARGE]
+    too_small = [x for x in line.rejected if x[1] == TOO_SMALL]
+    if too_large:
+        T, _, R_lim = max(too_large, key=lambda x: x[2])
+        deficit = 1.0 - R_lim / line.radius
+        parts.append(
+            f'At those T_pot the largest rocky interior, pure MgSiO3 at T_pot = {T:.0f} K, has '
+            f'R = {R_lim / R_EARTH:.4f} Earth radii, {100 * deficit:.1f}% below the '
+            'measured radius. With a pure Fe core and an MgSiO3 mantle on an adiabat, '
+            'the measured radius needs material less dense than MgSiO3, such as an '
+            'atmosphere or a volatile layer, above a smaller interior.'
+        )
+    if too_small:
+        T, _, R_lim = min(too_small, key=lambda x: x[2])
+        excess = R_lim / line.radius - 1.0
+        parts.append(
+            f'At those T_pot the smallest interior, pure iron at T_pot = {T:.0f} K, has '
+            f'R = {R_lim / R_EARTH:.4f} Earth radii, {100 * excess:.1f}% above the '
+            'measured radius, so the planet is denser than pure iron allows.'
+        )
+    return ' '.join(parts)
 
 
 def _uncertain(x, name):
