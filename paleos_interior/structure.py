@@ -21,7 +21,7 @@ from .tables import load_tables
 
 # Radius searches use TOL_SEARCH. Profiles use TOL_PROFILE, which keeps the mass
 # left at R_INNER near (4 pi / 3) rho r^3 so that P, T, and g stay smooth there.
-TOL_SEARCH = 1e-9
+TOL_SEARCH = 1e-8
 TOL_PROFILE = 1e-11
 
 
@@ -60,8 +60,10 @@ def _integrate(R, mass, cmf, T_pot, dT_cmb, tables, tol, dense=False):
     """Integrate inward from radius R.
 
     Returns (residual, solutions). The residual is m(R_INNER) / M when mass is
-    left over (R too small to hold M) and -r0 / R when the mass runs out at
-    r0 > R_INNER (R too large). Both branches vanish at the solution.
+    left over (R too small to hold M). When the mass runs out at r0 > R_INNER
+    (R too large), it is minus the mass of the empty central sphere,
+    -(4 pi / 3) rho r0^3 / M. Both branches are mass excesses, so the residual
+    is close to linear in R across the root.
     """
     y0 = [mass, P_SURFACE, T_pot]
     r_top = R
@@ -85,7 +87,9 @@ def _integrate(R, mass, cmf, T_pot, dT_cmb, tables, tol, dense=False):
         hit = sol.t_events[0]
         if last:
             if hit.size:
-                return -hit[0] / R, solutions
+                _, P0, T0 = sol.y_events[0][0]
+                rho0, _ = table.rho_nabla(P0, T0)
+                return -4.0 / 3.0 * math.pi * rho0 * hit[0] ** 3 / mass, solutions
             return sol.y[0, -1] / mass, solutions
         if not hit.size:
             # The mantle alone holds more than M (1 - CMF) inside R: R is too small.
@@ -119,22 +123,46 @@ def _bracket(residual, R_guess, factor=1.15, max_steps=12):
     raise NoSolutionError('no radius bracket found')
 
 
-def _solve_radius(mass, cmf, T_pot, dT_cmb, tables, tol=TOL_SEARCH, guess=None, xtol=1.0):
+def _secant(residual, R, xtol, max_steps=30):
+    """Secant iteration from R, or None if it does not settle within max_steps."""
+    f_prev = residual(R)
+    # The residual changes by about -4 dR/R near the root.
+    R_prev, R = R, R * (1.0 + f_prev / 4.0)
+    for _ in range(max_steps):
+        f = residual(R)
+        if math.isnan(f) or math.isnan(f_prev) or f == f_prev:
+            return None
+        step = f * (R - R_prev) / (f - f_prev)
+        step = min(max(step, -0.3 * R), 0.3 * R)
+        if abs(step) < xtol:
+            return R - step
+        R_prev, f_prev, R = R, f, R - step
+    return None
+
+
+def _solve_radius(mass, cmf, T_pot, dT_cmb, tables, tol=TOL_SEARCH, guess=None, xtol=10.0):
     """Return the radius (m) of a planet of the given mass (kg), CMF, and T_pot (K).
 
-    A ``guess`` from a looser solve narrows the starting bracket to 1e-5 of R.
-    ``xtol`` (m) is the radius tolerance: 1 m moves the CMF by about 5e-7.
+    A secant iteration from ``guess`` (default: a scaling estimate) converges in
+    three to five integrations. Brent's method on an expanding bracket is the
+    fallback. ``xtol`` (m) is the radius tolerance: 10 m moves the CMF by about 5e-6.
     """
+    start = guess or _radius_guess(mass, cmf, T_pot)
 
     def residual(R):
         value, _ = _integrate(R, mass, cmf, T_pot, dT_cmb, tables, tol)
+        return value
+
+    R = _secant(residual, start, xtol)
+    if R is not None:
+        return R
+
+    def guarded(R):
+        value = residual(R)
         return 1.0 if math.isnan(value) else value
 
-    if guess is None:
-        lo, hi = _bracket(residual, _radius_guess(mass, cmf, T_pot))
-    else:
-        lo, hi = _bracket(residual, guess, factor=1.0 + 1e-5)
-    return brentq(residual, lo, hi, xtol=xtol, rtol=1e-12)
+    lo, hi = _bracket(guarded, start)
+    return brentq(guarded, lo, hi, xtol=xtol, rtol=1e-12)
 
 
 def integrate(mass, cmf, T_pot, dT_cmb=0.0, tables=None, n_radial=1000):
