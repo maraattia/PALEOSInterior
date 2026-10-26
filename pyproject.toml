@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paleos-interior"
+version = "0.1.0"
+description = "Interior profiles of rocky planets compatible with a measured mass and radius, built on the PALEOS equations of state"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Mara Attia" }]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+]
+
+[project.optional-dependencies]
+develop = ["ruff"]
+
+[project.urls]
+Repository = "https://github.com/maraattia/PALEOSInterior"
+PALEOS = "https://github.com/maraattia/PALEOS"
+
+[tool.setuptools.packages.find]
+include = ["paleos_interior*"]
+
+[tool.ruff]
+line-length = 92
+
+[tool.ruff.format]
+quote-style = "single"

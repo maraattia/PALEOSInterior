@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Environments and tooling
+.venv/
+venv/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Run products
+*.log
+output/
