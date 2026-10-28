@@ -30,8 +30,8 @@ SOURCES = (
         '(2013), zero in liquids'
     ),
     (
-        'Viscosity of solids: post-perovskite from Tackley et al. (2013) eq. 1 (upper '
-        'bound), bridgmanite and pyroxenes from their eq. 4 lowered 100 times, Fe from '
+        'Viscosity of solids: post-perovskite (upper bound), bridgmanite, and pyroxenes '
+        'from Tackley et al. (2013) eq. 4 lowered 100 times, Fe from '
         'Ritterbex & Tsuchiya (2020) as the lower of diffusion and dislocation creep'
     ),
     (
@@ -196,19 +196,6 @@ def _tackley_relative(P, T, grain_size, eta_ref, E0, V0, p_decay):
     )
 
 
-# Post-perovskite, slow-direction (upper-bound) diffusion: Tackley et al. (2013)
-# Table 1 prefactors (s m-5) at 131.6, 505.4, and 1016.1 GPa and the Table 2 fit of H.
-_PPV_P = np.array([131.6e9, 505.4e9, 1016.1e9])
-_PPV_ETA0 = np.array([40e30, 95e30, 180e30])
-VACANCY_FRACTION = 1e-5
-
-
-def _ppv_viscosity(P, T, grain_size):
-    eta0 = np.exp(np.interp(P, _PPV_P, np.log(_PPV_ETA0)))
-    H = _tackley_enthalpy(P, 780e3, 1.70e-6, 1100e9)
-    return eta0 * grain_size**2 * K_B * T / VACANCY_FRACTION * np.exp(H / (R_GAS * T))
-
-
 # hcp Fe self-diffusion at 360 GPa (Ritterbex & Tsuchiya 2020, Table 1), applied at
 # the same homologous temperature at any pressure. Their melting point at 360 GPa,
 # 6370 K, sets the scale, and nearest-neighbor jumps give f Z / 6 = 0.78146 x 2.
@@ -266,11 +253,11 @@ def _liquid_mgsio3_viscosity(P, T):
 def viscosity(material, P, T, rho, phase, grain_size=1e-3):
     """Return the viscosity (Pa s) for arrays of P (Pa), T (K), rho, and phase labels.
 
-    ``grain_size`` (m) enters every solid law as d^2. Post-perovskite follows
-    Tackley et al. (2013) eq. 1, slow-direction bound, with a Mg vacancy
-    fraction of 1e-5. Bridgmanite and the pyroxenes follow their eq. 4 with the
-    perovskite and upper-mantle rows of Table 2, lowered 100 times to the Earth
-    values they state, at d = 1 mm.
+    ``grain_size`` (m) enters every solid law as d^2. Post-perovskite,
+    bridgmanite, and the pyroxenes follow Tackley et al. (2013) eq. 4 with the
+    post-perovskite upper-bound, perovskite, and upper-mantle rows of Table 2,
+    lowered 100 times to the Earth values they state, at d = 1 mm. This keeps
+    the post-perovskite to bridgmanite contrast of their model.
     """
     P, T, rho = (np.asarray(a, dtype=float) for a in (P, T, rho))
     phase = np.asarray(phase)
@@ -283,7 +270,7 @@ def viscosity(material, P, T, rho, phase, grain_size=1e-3):
         return eta
     eta[liquid] = _liquid_mgsio3_viscosity(P[liquid], T[liquid])
     k = phase == 'solid-ppv'
-    eta[k] = _ppv_viscosity(P[k], T[k], grain_size)
+    eta[k] = _tackley_relative(P[k], T[k], grain_size, 1.05e32, 780e3, 1.70e-6, 1100e9)
     k = phase == 'solid-brg'
     eta[k] = _tackley_relative(P[k], T[k], grain_size, 3e21, 370e3, 3.65e-6, 200e9)
     k = np.isin(phase, PYROXENES)

@@ -10,7 +10,7 @@ from . import __version__
 from .constants import M_EARTH, P_SURFACE, R_EARTH, R_INNER
 from .line import _uncertain, compatible_envelope, compatible_line
 from .profile import COLUMNS
-from .rheology import SOURCES, VACANCY_FRACTION
+from .rheology import SOURCES
 from .tables import load_tables
 
 LINE_COLUMNS = (
@@ -77,10 +77,7 @@ class InteriorResult:
                 'Model: Fe core under an MgSiO3 mantle, hydrostatic, adiabatic from '
                 f'P = {P_SURFACE:g} Pa at T_pot'
             ),
-            (
-                f'Grain size: {self.inputs["grain_size"]:g} m, Mg vacancy fraction in '
-                f'post-perovskite: {VACANCY_FRACTION:g}'
-            ),
+            f'Grain size: {self.inputs["grain_size"]:g} m',
             *SOURCES,
         ]
 
