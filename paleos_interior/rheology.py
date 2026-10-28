@@ -1,12 +1,15 @@
 """Melting curves, shear modulus, and viscosity of the PALEOS phases (SI units).
 
 A point is molten when T exceeds the melting curve that PALEOS uses for its
-phase diagram, and liquids carry a zero shear modulus. Solid silicates take the
-shear modulus of Stixrude and Lithgow-Bertelloni (2024) at the PALEOS volume.
-Solid iron takes the same cold curve with the softening of Nadal and Le Poac
-(2003), whose parameters come from the ab initio hcp-Fe moduli of Martorell et
-al. (2013). Its melting temperature is their 7350 K at 360 GPa, carried to other
-pressures in proportion to the Anzellini et al. (2013) melting curve. The viscosity laws and their sources are listed in ``viscosity``.
+phase diagram. The shear modulus is the unrelaxed (infinite-frequency) one in
+every phase, the parameter of a Maxwell or Andrade body. Solid silicates take
+the shear modulus of Stixrude and Lithgow-Bertelloni (2024) at the PALEOS
+volume. Solid iron takes the same cold curve with the softening of Nadal and Le
+Poac (2003), whose parameters come from the ab initio hcp-Fe moduli of Martorell
+et al. (2013). Its melting temperature is their 7350 K at 360 GPa, carried to
+other pressures in proportion to the Anzellini et al. (2013) melting curve.
+Liquids take the fits in ``_liquid_shear``. The viscosity laws and their
+sources are listed in ``viscosity``.
 """
 
 import numpy as np
@@ -27,7 +30,12 @@ SOURCES = (
         'Shear modulus: Stixrude & Lithgow-Bertelloni (2024) at the PALEOS volume. Solid '
         'Fe uses their cold curve with the Nadal & Le Poac (2003) softening, parameters '
         'from Martorell et al. (2013), whose 7350 K melting point at 360 GPa scales with '
-        'the Anzellini et al. (2013) curve. Zero in liquids'
+        'the Anzellini et al. (2013) curve'
+    ),
+    (
+        'Liquid shear modulus, unrelaxed: Fe from a fit to Xian et al. (2019) Table S2, '
+        'MgSiO3 from MgSiO3 glass moduli of Ghosh et al. (2014) at the same density. '
+        'V_P and V_S use the relaxed modulus, zero in liquids'
     ),
     (
         'Viscosity of silicate solids: Tackley et al. (2013) eq. 4 with the upper-bound '
@@ -186,19 +194,43 @@ def _iron_shear(p, P, T, rho):
     return (G0 * (1.0 - That) + rho * K_B * T / (C * M_FE)) / J
 
 
-def shear_modulus(P, T, rho, phase):
-    """Return the shear modulus (Pa) for arrays of P (Pa), T (K), rho, and phase labels.
+# Unrelaxed liquid shear modulus. Fe: G_inf = c G_cold(rho) + b T with G_cold the
+# SLB hcp cold curve, fitted to Xian et al. (2019) Table S2 (9.5 to 13.3 g/cm3, 4300 to
+# 10000 K, rms 7.4 GPa). (c, b in Pa K-1)
+_FE_LIQUID_SHEAR = (0.712396, 6.02382e6)
+# MgSiO3: G_inf = a (rho / 3000 kg m-3)^n, fitted to the hot-compression glass moduli
+# c'44 of Ghosh et al. (2014) Table S2 at densities from their Table 2 equation of
+# state (3.0 to 7.0 g/cm3, rms 0.028 dex). (a in Pa, n)
+_MELT_SHEAR = (31.9392e9, 1.90372)
 
-    Liquids get zero and points without a phase label (no table data) NaN.
-    Raises ``ValueError`` for a label that is neither a known solid nor 'liquid'.
+
+def _liquid_shear(material, T, rho):
+    """Unrelaxed shear modulus (Pa) of liquid iron or MgSiO3."""
+    if material == 'iron':
+        c, b = _FE_LIQUID_SHEAR
+        p = _SLB['fee']
+        return c * _slb_cold(p, rho * p[0] / p[10]) + b * T
+    a, n = _MELT_SHEAR
+    return a * (rho / 3000.0) ** n
+
+
+def shear_modulus(material, P, T, rho, phase):
+    """Return the unrelaxed shear modulus (Pa) of 'iron' or 'mgsio3'.
+
+    P (Pa), T (K), rho, and phase labels are arrays. Points without a phase
+    label (no table data) are NaN. Raises ``ValueError`` for an unknown material
+    or a label that is neither a known solid nor 'liquid'.
     """
+    if material not in ('iron', 'mgsio3'):
+        raise ValueError(f'unknown material {material!r}')
     P, T, rho = (np.asarray(a, dtype=float) for a in (P, T, rho))
     phase = np.asarray(phase)
     unknown = set(np.unique(phase)) - set(_SLB_PHASE) - {'liquid', ''}
     if unknown:
         raise ValueError(f'no shear modulus for phase labels {sorted(map(str, unknown))}')
     mu = np.full_like(P, np.nan)
-    mu[phase == 'liquid'] = 0.0
+    liquid = phase == 'liquid'
+    mu[liquid] = _liquid_shear(material, T[liquid], rho[liquid])
     for label, key in _SLB_PHASE.items():
         k = phase == label
         if not k.any():

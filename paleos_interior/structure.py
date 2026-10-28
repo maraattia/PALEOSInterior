@@ -199,7 +199,7 @@ def integrate(
         props['T'] = T
         phase = melt_consistent_phase(table.material, table, P, T, props['phase'])
         props['phase'] = phase
-        props['mu'] = shear_modulus(P, T, props['rho'], phase)
+        props['mu'] = shear_modulus(table.material, P, T, props['rho'], phase)
         props['eta'] = viscosity(table.material, P, T, props['rho'], phase, grain_size)
         cols = {'r': r, 'm': m, 'P': P, 'T': T, 'layer': np.full(n, name)}
         keys = ('rho', 'cp', 'cv', 'alpha', 'nabla_ad', 'mu', 'eta', 'phase')

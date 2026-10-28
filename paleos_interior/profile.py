@@ -85,10 +85,13 @@ def derived_columns(r, m, props):
 
     K_T follows from C_P - C_V = T alpha^2 K_T / rho and K_S = K_T C_P / C_V,
     so both inherit any error in the tabulated heat capacities. ``props['mu']``
-    is the shear modulus, zero in liquids, where V_P equals V_phi.
+    is the unrelaxed shear modulus. V_P and V_S use the relaxed one, which is
+    zero in liquids because their Maxwell times are of order 1e-11 s or less, so
+    there V_S = 0 and V_P = V_phi.
     """
     rho, cp, cv, alpha = props['rho'], props['cp'], props['cv'], props['alpha']
-    T, mu = props['T'], props['mu']
+    T = props['T']
+    mu = np.where(props['phase'] == 'liquid', 0.0, props['mu'])
     with np.errstate(divide='ignore', invalid='ignore'):
         K_T = rho * (cp - cv) / (T * alpha**2)
         K_S = K_T * cp / cv
