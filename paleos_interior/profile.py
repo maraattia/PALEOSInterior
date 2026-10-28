@@ -20,9 +20,9 @@ COLUMNS = (
     ('K_T', 'Pa'),
     ('K_S', 'Pa'),
     ('V_phi', 'm s-1'),
-    ('G', 'Pa'),
-    ('v_P', 'm s-1'),
-    ('v_S', 'm s-1'),
+    ('mu', 'Pa'),
+    ('V_P', 'm s-1'),
+    ('V_S', 'm s-1'),
     ('eta', 'Pa s'),
     ('layer', ''),
     ('phase', ''),
@@ -84,22 +84,22 @@ def derived_columns(r, m, props):
     """Return gravity, the bulk moduli, and the bulk, P, and S wave speeds.
 
     K_T follows from C_P - C_V = T alpha^2 K_T / rho and K_S = K_T C_P / C_V,
-    so both inherit any error in the tabulated heat capacities. ``props['G']``
-    is the shear modulus, zero in liquids, where v_P equals V_phi.
+    so both inherit any error in the tabulated heat capacities. ``props['mu']``
+    is the shear modulus, zero in liquids, where V_P equals V_phi.
     """
     rho, cp, cv, alpha = props['rho'], props['cp'], props['cv'], props['alpha']
-    T, mu = props['T'], props['G']
+    T, mu = props['T'], props['mu']
     with np.errstate(divide='ignore', invalid='ignore'):
         K_T = rho * (cp - cv) / (T * alpha**2)
         K_S = K_T * cp / cv
         V_phi = np.sqrt(K_S / rho)
-        v_P = np.sqrt((K_S + 4.0 * mu / 3.0) / rho)
-        v_S = np.sqrt(mu / rho)
+        V_P = np.sqrt((K_S + 4.0 * mu / 3.0) / rho)
+        V_S = np.sqrt(mu / rho)
     return {
         'g': G * m / r**2,
         'K_T': K_T,
         'K_S': K_S,
         'V_phi': V_phi,
-        'v_P': v_P,
-        'v_S': v_S,
+        'V_P': V_P,
+        'V_S': V_S,
     }
