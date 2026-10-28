@@ -238,16 +238,16 @@ def _liquid_iron_viscosity(T, rho):
     return n ** (2.0 / 3.0) * np.sqrt(M_FE * K_B * T) * 0.313 * np.exp(v)
 
 
-# ln(eta / Pa s) = a0 + a1 P + a2 P^2 + (b0 + b1 P + b2 P^2) / (T - T0), P in GPa,
-# fitted to the 76 AIMD points above the PALEOS melting curve in the data of Luo &
-# Deng (2025) and Luo et al. (2021), 2200 to 14000 K and 0 to 1160 GPa, rms 0.11 dex.
-_MELT_VFT = (-8.00794, -0.00353864, 7.64692e-06, 5550.97, 116.863, -0.123599, 1059.74)
+# ln(eta / Pa s) = a0 + a1 P + b0 (1 + P / P_b)^beta / (T - T0), P in GPa, fitted to the
+# 76 AIMD points above the PALEOS melting curve in Luo & Deng (2025) and Luo et al. (2021),
+# 2200 to 14000 K and 0 to 1160 GPa, rms 0.096 dex. The numerator stays positive at any P.
+_MELT_VFT = (-8.21241, 0.000273733, 5892.01, 15.8716, 0.498385, 1018.24)
 
 
 def _liquid_mgsio3_viscosity(P, T):
-    a0, a1, a2, b0, b1, b2, T0 = _MELT_VFT
+    a0, a1, b0, P_b, beta, T0 = _MELT_VFT
     p = P / 1e9
-    return np.exp(a0 + a1 * p + a2 * p**2 + (b0 + b1 * p + b2 * p**2) / (T - T0))
+    return np.exp(a0 + a1 * p + b0 * (1.0 + p / P_b) ** beta / (T - T0))
 
 
 def viscosity(material, P, T, rho, phase, grain_size=1e-3):
