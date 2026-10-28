@@ -134,8 +134,22 @@ class MaterialTable:
             hi = g[i + 1, j] + fy * (g[i + 1, j + 1] - g[i + 1, j])
             out[key] = lo + fx * (hi - lo)
         codes = self._phase_grid[np.rint(x).astype(int), np.rint(y).astype(int)]
-        out['phase'] = np.where(codes >= 0, self.phase_names[codes], '')
+        out['phase'] = np.where(codes >= 0, self.phase_names[codes], '').astype('<U32')
         return out
+
+    def solid_phase(self, P, T):
+        """Return the label of the nearest solid node at or below T on the row of P."""
+        i = np.rint((np.log10(P) - self._p0) / self._step_p).astype(int)
+        j = np.rint((np.log10(T) - self._t0) / self._step_t).astype(int)
+        i = np.clip(i, 0, self._n_p - 1)
+        j = np.clip(j, 0, self._n_t - 1)
+        names = list(self.phase_names)
+        out = []
+        for ii, jj in zip(i, j):
+            row = self._phase_grid[ii, : jj + 1][::-1]
+            solid = [c for c in row if c >= 0 and names[c] != 'liquid']
+            out.append(names[solid[0]] if solid else '')
+        return np.array(out, dtype='<U32')
 
 
 def _uniform_step(axis):
