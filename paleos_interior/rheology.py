@@ -5,8 +5,8 @@ phase diagram, and liquids carry a zero shear modulus. Solid silicates take the
 shear modulus of Stixrude and Lithgow-Bertelloni (2024) at the PALEOS volume.
 Solid iron takes the same cold curve with the softening of Nadal and Le Poac
 (2003), whose parameters come from the ab initio hcp-Fe moduli of Martorell et
-al. (2013) and which is applied at equal T / T_m with T_m from Anzellini et al.
-(2013). The viscosity laws and their sources are listed in ``viscosity``.
+al. (2013). Its melting temperature is their 7350 K at 360 GPa, carried to other
+pressures in proportion to the Anzellini et al. (2013) melting curve. The viscosity laws and their sources are listed in ``viscosity``.
 """
 
 import numpy as np
@@ -26,8 +26,8 @@ SOURCES = (
     (
         'Shear modulus: Stixrude & Lithgow-Bertelloni (2024) at the PALEOS volume. Solid '
         'Fe uses their cold curve with the Nadal & Le Poac (2003) softening, parameters '
-        'from Martorell et al. (2013), applied at equal T/T_m with the Anzellini et al. '
-        '(2013) T_m. Zero in liquids'
+        'from Martorell et al. (2013), whose 7350 K melting point at 360 GPa scales with '
+        'the Anzellini et al. (2013) curve. Zero in liquids'
     ),
     (
         'Viscosity of silicate solids: Tackley et al. (2013) eq. 4 with the upper-bound '
@@ -171,12 +171,15 @@ def _slb_cold_at_pressure(p, P):
 # zeta fits their Table S1 at 360 GPa with f and T_m held at 0.112 and 7350 K.
 NP_F = 0.112
 NP_ZETA = 0.1048
-_T_HAT_MAX = 0.999  # keeps J finite for a solid point at the melting curve
+_T_HAT_MAX = 0.999  # keeps J finite for any T up to the model melting temperature
+# Their 7350 K is where the simulated crystal fails, above the thermodynamic melting
+# point. The ratio to the Anzellini et al. (2013) curve at 360 GPa, 1.13, is held at all P.
+_NP_TM_SCALE = 7350.0 / float(melting_temperature('iron', 360e9))
 
 
 def _iron_shear(p, P, T, rho):
-    """Shear modulus (Pa) of solid iron, softened toward melting at equal T / T_m."""
-    That = np.minimum(T / melting_temperature('iron', P), _T_HAT_MAX)
+    """Shear modulus (Pa) of solid iron, softened toward the model melting temperature."""
+    That = np.minimum(T / (_NP_TM_SCALE * melting_temperature('iron', P)), _T_HAT_MAX)
     C = (6.0 * np.pi**2) ** (2.0 / 3.0) * NP_F**2 / 3.0
     J = 1.0 + np.exp(-(1.0 + 1.0 / NP_ZETA) / (1.0 + NP_ZETA / (1.0 - That)))
     G0 = _slb_cold_at_pressure(p, P)
