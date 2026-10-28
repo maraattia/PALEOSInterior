@@ -10,6 +10,7 @@ from . import __version__
 from .constants import M_EARTH, P_SURFACE, R_EARTH, R_INNER
 from .line import _uncertain, compatible_envelope, compatible_line
 from .profile import COLUMNS
+from .rheology import SOURCES, VACANCY_FRACTION
 from .tables import load_tables
 
 LINE_COLUMNS = (
@@ -76,6 +77,11 @@ class InteriorResult:
                 'Model: Fe core under an MgSiO3 mantle, hydrostatic, adiabatic from '
                 f'P = {P_SURFACE:g} Pa at T_pot'
             ),
+            (
+                f'Grain size: {self.inputs["grain_size"]:g} m, Mg vacancy fraction in '
+                f'post-perovskite: {VACANCY_FRACTION:g}'
+            ),
+            *SOURCES,
         ]
 
     def write(self, folder):
@@ -164,6 +170,7 @@ def interior_profiles(
     n_line=12,
     n_radial=1000,
     table_dir=None,
+    grain_size=1e-3,
 ):
     """Return interior profiles compatible with a measured mass and radius.
 
@@ -172,8 +179,9 @@ def interior_profiles(
     (min, max) range of 1 bar mantle potential temperatures in K. The nominal
     line is solved on ``n_line`` T_pot values, ``n_profiles`` profiles of
     ``n_radial`` points are sampled evenly in T_pot along it, and the
-    uncertainties give the envelope lines. Raises ``NoSolutionError`` when no
-    Fe-MgSiO3 interior reproduces the nominal mass and radius.
+    uncertainties give the envelope lines. ``grain_size`` (m) sets the solid
+    viscosities. Raises ``NoSolutionError`` when no Fe-MgSiO3 interior
+    reproduces the nominal mass and radius.
     """
     tables = load_tables(table_dir)
     M = _uncertain(mass, 'mass')
@@ -183,6 +191,12 @@ def interior_profiles(
         envelope = compatible_envelope(M, R, T_pot, dT_cmb, n_line, tables)
     else:
         envelope = {}
-    profiles = line.sample(n_profiles, n_radial)
-    inputs = {'mass': M, 'radius': R, 'T_pot': tuple(sorted(T_pot)), 'dT_cmb': dT_cmb}
+    profiles = line.sample(n_profiles, n_radial, grain_size)
+    inputs = {
+        'mass': M,
+        'radius': R,
+        'T_pot': tuple(sorted(T_pot)),
+        'dT_cmb': dT_cmb,
+        'grain_size': grain_size,
+    }
     return InteriorResult(line, envelope, profiles, inputs, tables)

@@ -93,8 +93,11 @@ class CompatibleLine:
                 continue
         return guess
 
-    def sample(self, n, n_radial=1000):
-        """Return ``n`` profiles evenly spaced in T_pot over the solvable interval."""
+    def sample(self, n, n_radial=1000, grain_size=1e-3):
+        """Return ``n`` profiles evenly spaced in T_pot over the solvable interval.
+
+        ``grain_size`` (m) sets the solid viscosities of every profile.
+        """
         if not self.solvable:
             raise NoSolutionError('the line has no solvable point to sample')
         lo, hi = self.T_range
@@ -105,7 +108,13 @@ class CompatibleLine:
             cmf = self._cmf_exact(float(T), radius_map)
             profiles.append(
                 integrate(
-                    self.mass / M_EARTH, cmf, float(T), self.dT_cmb, self.tables, n_radial
+                    self.mass / M_EARTH,
+                    cmf,
+                    float(T),
+                    self.dT_cmb,
+                    self.tables,
+                    n_radial,
+                    grain_size,
                 )
             )
         return profiles

@@ -20,6 +20,10 @@ COLUMNS = (
     ('K_T', 'Pa'),
     ('K_S', 'Pa'),
     ('V_phi', 'm s-1'),
+    ('G', 'Pa'),
+    ('v_P', 'm s-1'),
+    ('v_S', 'm s-1'),
+    ('eta', 'Pa s'),
     ('layer', ''),
     ('phase', ''),
 )
@@ -40,6 +44,7 @@ class Profile:
     T_pot: float
     dT_cmb: float
     columns: dict = field(repr=False)
+    grain_size: float = np.nan
     R_cmb: float = np.nan
     P_cmb: float = np.nan
     T_cmb: float = np.nan
@@ -66,6 +71,7 @@ class Profile:
             'CMF': self.cmf,
             'T_pot': self.T_pot,
             'dT_cmb': self.dT_cmb,
+            'grain_size': self.grain_size,
             'R_cmb': self.R_cmb,
             'P_cmb': self.P_cmb,
             'T_cmb': self.T_cmb,
@@ -75,15 +81,25 @@ class Profile:
 
 
 def derived_columns(r, m, props):
-    """Return gravity, the bulk moduli, and the bulk sound speed.
+    """Return gravity, the bulk moduli, and the bulk, P, and S wave speeds.
 
     K_T follows from C_P - C_V = T alpha^2 K_T / rho and K_S = K_T C_P / C_V,
-    so both inherit any error in the tabulated heat capacities.
+    so both inherit any error in the tabulated heat capacities. ``props['G']``
+    is the shear modulus, zero in liquids, where v_P equals V_phi.
     """
     rho, cp, cv, alpha = props['rho'], props['cp'], props['cv'], props['alpha']
-    T = props['T']
+    T, mu = props['T'], props['G']
     with np.errstate(divide='ignore', invalid='ignore'):
         K_T = rho * (cp - cv) / (T * alpha**2)
         K_S = K_T * cp / cv
         V_phi = np.sqrt(K_S / rho)
-    return {'g': G * m / r**2, 'K_T': K_T, 'K_S': K_S, 'V_phi': V_phi}
+        v_P = np.sqrt((K_S + 4.0 * mu / 3.0) / rho)
+        v_S = np.sqrt(mu / rho)
+    return {
+        'g': G * m / r**2,
+        'K_T': K_T,
+        'K_S': K_S,
+        'V_phi': V_phi,
+        'v_P': v_P,
+        'v_S': v_S,
+    }
