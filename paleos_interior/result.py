@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from . import __version__
-from .constants import M_EARTH, P_SURFACE, R_EARTH, R_INNER
+from .constants import GRAIN_SIZE, M_EARTH, P_SURFACE, R_EARTH, R_INNER
 from .line import _uncertain, compatible_envelope, compatible_line
 from .profile import COLUMNS
 from .rheology import SOURCES
@@ -78,7 +78,6 @@ class InteriorResult:
                 f'P = {P_SURFACE:g} Pa at T_pot'
             ),
             f'Grain size: {self.inputs["grain_size"]:g} m',
-            *SOURCES,
         ]
 
     def write(self, folder):
@@ -105,6 +104,7 @@ class InteriorResult:
                 f'{key} = {value:.6g}' for key, value in profile.scalars().items()
             )
             header = self._header(f'Radial profile {k:03d}, surface to r = {R_INNER:g} m')
+            header += SOURCES
             header.append(f'Scalars (SI): {scalars}')
             _write_csv(
                 folder / f'profile_{k:03d}.csv',
@@ -167,7 +167,7 @@ def interior_profiles(
     n_line=12,
     n_radial=1000,
     table_dir=None,
-    grain_size=1e-3,
+    grain_size=GRAIN_SIZE,
 ):
     """Return interior profiles compatible with a measured mass and radius.
 
@@ -176,10 +176,13 @@ def interior_profiles(
     (min, max) range of 1 bar mantle potential temperatures in K. The nominal
     line is solved on ``n_line`` T_pot values, ``n_profiles`` profiles of
     ``n_radial`` points are sampled evenly in T_pot along it, and the
-    uncertainties give the envelope lines. ``grain_size`` (m) sets the solid
-    viscosities. Raises ``NoSolutionError`` when no Fe-MgSiO3 interior
-    reproduces the nominal mass and radius.
+    uncertainties give the envelope lines. ``grain_size`` (m) sets the silicate
+    viscosities and the diffusion-creep branch of solid iron. Raises
+    ``NoSolutionError`` when no Fe-MgSiO3 interior reproduces the nominal mass
+    and radius.
     """
+    if not grain_size > 0.0:
+        raise ValueError(f'grain_size must be positive, got {grain_size}')
     tables = load_tables(table_dir)
     M = _uncertain(mass, 'mass')
     R = _uncertain(radius, 'radius')

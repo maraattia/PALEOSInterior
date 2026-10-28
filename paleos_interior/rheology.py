@@ -1,19 +1,18 @@
 """Melting curves, shear modulus, and viscosity of the PALEOS phases (SI units).
 
 A point is molten when T exceeds the melting curve that PALEOS uses for its
-phase diagram, and liquids carry G = 0. Solid silicates take the shear modulus
-of Stixrude and Lithgow-Bertelloni (2024) at the PALEOS volume. Solid iron
-takes the same cold curve with the homologous softening of Nadal and Le Poac
-(2003), fitted to the ab initio hcp-Fe moduli of Martorell et al. (2013).
-Viscosities follow the per-phase laws cited in ``viscosity``.
+phase diagram, and liquids carry a zero shear modulus. Solid silicates take the
+shear modulus of Stixrude and Lithgow-Bertelloni (2024) at the PALEOS volume.
+Solid iron takes the same cold curve with the softening of Nadal and Le Poac
+(2003), whose parameters come from the ab initio hcp-Fe moduli of Martorell et
+al. (2013) and which is applied at equal T / T_m with T_m from Anzellini et al.
+(2013). The viscosity laws and their sources are listed in ``viscosity``.
 """
 
 import numpy as np
 
-K_B = 1.380649e-23  # J K-1
-R_GAS = 8.314462618  # J mol-1 K-1
-EV = 1.602176634e-19  # J
-AMU = 1.66053906660e-27  # kg
+from .constants import AMU, EV, GRAIN_SIZE, K_B, R_GAS
+
 M_FE = 55.845 * AMU  # kg per atom
 
 SOLID_IRON = ('solid-alpha-bcc', 'solid-delta-bcc', 'solid-gamma-fcc', 'solid-epsilon-hcp')
@@ -25,36 +24,50 @@ SOURCES = (
         'Fei et al. (2021) for MgSiO3, as in PALEOS'
     ),
     (
-        'Shear modulus: Stixrude & Lithgow-Bertelloni (2024) at the PALEOS volume, '
-        'solid Fe softened after Nadal & Le Poac (2003) as fitted to Martorell et al. '
-        '(2013), zero in liquids'
+        'Shear modulus: Stixrude & Lithgow-Bertelloni (2024) at the PALEOS volume. Solid '
+        'Fe uses their cold curve with the Nadal & Le Poac (2003) softening, parameters '
+        'from Martorell et al. (2013), applied at equal T/T_m with the Anzellini et al. '
+        '(2013) T_m. Zero in liquids'
     ),
     (
-        'Viscosity of solids: post-perovskite (upper bound), bridgmanite, and pyroxenes '
-        'from Tackley et al. (2013) eq. 4 lowered 100 times, Fe from '
-        'Ritterbex & Tsuchiya (2020) as the lower of diffusion and dislocation creep'
+        'Viscosity of silicate solids: Tackley et al. (2013) eq. 4 with the upper-bound '
+        'post-perovskite, perovskite, and upper-mantle rows of their Table 2, reference '
+        'viscosity lowered 100 times, at 1600 K and 1 mm grains, scaled as grain size squared'
     ),
     (
-        'Viscosity of liquids: Fe from Li et al. (2021), MgSiO3 from a VFT fit to '
-        'Luo & Deng (2025) and Luo et al. (2021)'
+        'Viscosity of solid Fe: lower of Nabarro-Herring diffusion creep and dislocation '
+        'creep from Ritterbex & Tsuchiya (2020) at equal T/T_m. Dislocation creep does not '
+        'depend on grain size and sets the value for grains above about 0.3 mm'
+    ),
+    (
+        'Viscosity of liquids: Fe from the Li et al. (2021) free-volume model with the '
+        'exponent sign that reproduces their AIMD values, MgSiO3 from a fit to Luo & Deng '
+        '(2025) and Luo et al. (2021)'
     ),
 )
+
+# Anzellini et al. (2013) Simon-Glatzel fit for Fe, two branches meeting at the
+# gamma-epsilon-liquid triple point: (P_ref GPa, T_ref K, a GPa, c) per branch.
+_FE_MELT_LOW = (5.2, 1991.0, 27.39, 2.38)
+_FE_MELT_HIGH = (98.5, 3712.0, 161.2, 1.72)
+# MgSiO3: Belonoshko et al. (2005) below P0, Fei et al. (2021) lower bound above.
+_P0_MELT_MGSIO3 = 2.551686137257537  # GPa, where the two branches meet
 
 
 def melting_temperature(material, P):
     """Return the melting temperature (K) of 'iron' or 'mgsio3' at pressure P (Pa)."""
     P_GPa = np.asarray(P, dtype=float) / 1e9
     if material == 'iron':
-        # Anzellini et al. (2013), eq. 6, both branches meet at the 98.5 GPa triple point.
-        low = 1991.0 * ((P_GPa - 5.2) / 27.39 + 1.0) ** (1.0 / 2.38)
-        high = 3712.0 * (np.maximum(P_GPa - 98.5, 0.0) / 161.2 + 1.0) ** (1.0 / 1.72)
-        return np.where(P_GPa < 98.5, low, high)
+        p0, t0, a, c = _FE_MELT_LOW
+        low = t0 * ((P_GPa - p0) / a + 1.0) ** (1.0 / c)
+        p0, t0, a, c = _FE_MELT_HIGH
+        high = t0 * (np.maximum(P_GPa - p0, 0.0) / a + 1.0) ** (1.0 / c)
+        return np.where(P_GPa < _FE_MELT_HIGH[0], low, high)
     if material == 'mgsio3':
-        # Belonoshko et al. (2005) below 2.5517 GPa, Fei et al. (2021) lower bound above.
         P_GPa = np.maximum(P_GPa, 0.0)
         low = 1831.0 * (1.0 + P_GPa / 4.6) ** 0.33
         high = 6000.0 * (P_GPa / 140.0) ** 0.26
-        return np.where(P_GPa < 2.551686137257537, low, high)
+        return np.where(P_GPa < _P0_MELT_MGSIO3, low, high)
     raise ValueError(f'unknown material {material!r}')
 
 
@@ -98,6 +111,7 @@ _SLB_PHASE = {
     'solid-brg': 'mgpv',
     'solid-ppv': 'mppv',
 }
+_T_SLB_REF = 300.0  # K, reference temperature of the SLB thermal terms
 
 _GL_X, _GL_W = np.polynomial.legendre.leggauss(48)
 
@@ -135,7 +149,8 @@ def _slb_shear(p, rho, T):
     gamma = (2.0 * f + 1.0) * (a1 + a2 * f) / (6.0 * nu2)
     eta_s = -gamma - 0.5 / nu2 * (2.0 * f + 1.0) ** 2 * (-2.0 * g0 - 2.0 * eta0)
     theta = theta0 * np.sqrt(nu2)
-    dE = _debye_energy(T, theta, n) - _debye_energy(np.full_like(T, 300.0), theta, n)
+    T_ref = np.full_like(T, _T_SLB_REF)
+    dE = _debye_energy(T, theta, n) - _debye_energy(T_ref, theta, n)
     return _slb_cold(p, x) - eta_s * dE / V
 
 
@@ -152,15 +167,16 @@ def _slb_cold_at_pressure(p, P):
 
 
 # Nadal and Le Poac (2003) model as written by Banerjee (2005, arXiv:cond-mat/0512466,
-# eqs. 10 and 11). f = 0.112 is the Lindemann constant of Martorell et al. (2013); zeta
-# is fitted here to their Table S1 at 360 GPa with f and T_m held at 0.112 and 7350 K.
+# eqs. 10 and 11). f = 0.112 is the Lindemann constant of Martorell et al. (2013), and
+# zeta fits their Table S1 at 360 GPa with f and T_m held at 0.112 and 7350 K.
 NP_F = 0.112
 NP_ZETA = 0.1048
+_T_HAT_MAX = 0.999  # keeps J finite for a solid point at the melting curve
 
 
 def _iron_shear(p, P, T, rho):
-    """Shear modulus (Pa) of solid iron with homologous softening up to melting."""
-    That = np.minimum(T / melting_temperature('iron', P), 0.999)
+    """Shear modulus (Pa) of solid iron, softened toward melting at equal T / T_m."""
+    That = np.minimum(T / melting_temperature('iron', P), _T_HAT_MAX)
     C = (6.0 * np.pi**2) ** (2.0 / 3.0) * NP_F**2 / 3.0
     J = 1.0 + np.exp(-(1.0 + 1.0 / NP_ZETA) / (1.0 + NP_ZETA / (1.0 - That)))
     G0 = _slb_cold_at_pressure(p, P)
@@ -168,32 +184,47 @@ def _iron_shear(p, P, T, rho):
 
 
 def shear_modulus(P, T, rho, phase):
-    """Return the shear modulus (Pa) for arrays of P (Pa), T (K), rho, and phase labels."""
+    """Return the shear modulus (Pa) for arrays of P (Pa), T (K), rho, and phase labels.
+
+    Liquids get zero and points without a phase label (no table data) NaN.
+    Raises ``ValueError`` for a label that is neither a known solid nor 'liquid'.
+    """
     P, T, rho = (np.asarray(a, dtype=float) for a in (P, T, rho))
     phase = np.asarray(phase)
-    G = np.zeros_like(P)
+    unknown = set(np.unique(phase)) - set(_SLB_PHASE) - {'liquid', ''}
+    if unknown:
+        raise ValueError(f'no shear modulus for phase labels {sorted(map(str, unknown))}')
+    mu = np.full_like(P, np.nan)
+    mu[phase == 'liquid'] = 0.0
     for label, key in _SLB_PHASE.items():
         k = phase == label
         if not k.any():
             continue
         if label in SOLID_IRON:
-            G[k] = _iron_shear(_SLB[key], P[k], T[k], rho[k])
+            mu[k] = _iron_shear(_SLB[key], P[k], T[k], rho[k])
         else:
-            G[k] = _slb_shear(_SLB[key], rho[k], T[k])
-    return G
+            mu[k] = _slb_shear(_SLB[key], rho[k], T[k])
+    return mu
 
 
-def _tackley_enthalpy(P, E0, V0, p_decay):
-    """Activation enthalpy (J mol-1), Tackley et al. (2013) eqs. 2 and 3."""
-    return E0 + P * V0 * np.exp(-P / p_decay)
+# Tackley et al. (2013) Table 2 rows (eta_ref Pa s, E0 J mol-1, V0 m3 mol-1, p_decay Pa),
+# with eta_ref lowered 100 times to the Earth values they state, at T0 = 1600 K and
+# 1 mm grains. Post-perovskite takes the upper-bound (slow diffusion) row.
+_TACKLEY = {
+    'upper mantle': (1e19, 300e3, 5.00e-6, np.inf),
+    'perovskite': (3e21, 370e3, 3.65e-6, 200e9),
+    'post-perovskite': (1.05e32, 780e3, 1.70e-6, 1100e9),
+}
+_TACKLEY_T0 = 1600.0  # K
+_GRAIN_REF = 1e-3  # m
 
 
-def _tackley_relative(P, T, grain_size, eta_ref, E0, V0, p_decay):
-    """Tackley et al. (2013) eq. 4 with T0 = 1600 K, scaled as d^2 from 1 mm."""
-    H = _tackley_enthalpy(P, E0, V0, p_decay)
-    return (
-        eta_ref * (grain_size / 1e-3) ** 2 * np.exp(H / (R_GAS * T) - E0 / (R_GAS * 1600.0))
-    )
+def _tackley_viscosity(row, P, T, grain_size):
+    """Tackley et al. (2013) eq. 4 with H(P) from their eqs. 2 and 3, scaled as d^2."""
+    eta_ref, E0, V0, p_decay = _TACKLEY[row]
+    H = E0 + P * V0 * np.exp(-P / p_decay)
+    arrhenius = np.exp(H / (R_GAS * T) - E0 / (R_GAS * _TACKLEY_T0))
+    return eta_ref * (grain_size / _GRAIN_REF) ** 2 * arrhenius
 
 
 # hcp Fe self-diffusion at 360 GPa (Ritterbex & Tsuchiya 2020, Table 1), applied at
@@ -202,40 +233,48 @@ def _tackley_relative(P, T, grain_size, eta_ref, E0, V0, p_decay):
 _FE_H = (10.3 + 3.21) * EV
 _FE_S = 3.26
 _FE_NU = 21.3e12
+_FE_JUMP_FACTOR = 0.78146 * 2.0
 _FE_TM_REF = 6370.0
+_NH_ALPHA = 40.0 / 3.0  # Nabarro-Herring geometric factor with grain-boundary sliding
+# Weertman creep viscosity of hcp Fe at 360 GPa and 5500 K (Ritterbex & Tsuchiya 2020).
+_FE_DISLOCATION = (1e17, 5500.0)
 
 
-def _iron_diffusivity(P, T, rho):
-    """Fe self-diffusion coefficient (m2 s-1) at homologous temperature T / T_m(P)."""
-    T_ref = T / melting_temperature('iron', P) * _FE_TM_REF
+def _iron_diffusivity(T_ref, rho):
+    """Fe self-diffusion coefficient (m2 s-1) at the 360 GPa equivalent temperature T_ref."""
     jump = (np.sqrt(2.0) * M_FE / rho) ** (1.0 / 3.0)
-    return 0.78146 * 2.0 * jump**2 * _FE_NU * np.exp(_FE_S - _FE_H / (K_B * T_ref))
+    return _FE_JUMP_FACTOR * jump**2 * _FE_NU * np.exp(_FE_S - _FE_H / (K_B * T_ref))
 
 
 def _iron_viscosity(P, T, rho, grain_size):
     """Lower of Nabarro-Herring diffusion creep and climb-controlled dislocation creep.
 
     Diffusion creep is eta = d^2 k T / (alpha D Omega) with alpha = 40/3. The
-    dislocation branch is the 1e17 Pa s that Ritterbex and Tsuchiya (2020) find
-    for Weertman creep at 5500 K and 360 GPa, scaled as 1 / D at equal T / T_m.
+    dislocation branch is the Weertman-creep viscosity of Ritterbex and Tsuchiya
+    (2020) at 5500 K and 360 GPa, scaled as 1 / D at equal T / T_m. It does not
+    depend on grain size and is the lower branch for grains above about 0.3 mm.
     """
-    D = _iron_diffusivity(P, T, rho)
-    diffusion = grain_size**2 * K_B * T / (40.0 / 3.0 * D * (M_FE / rho))
     T_ref = T / melting_temperature('iron', P) * _FE_TM_REF
-    dislocation = 1e17 * np.exp(_FE_H / K_B * (1.0 / T_ref - 1.0 / 5500.0))
+    D = _iron_diffusivity(T_ref, rho)
+    diffusion = grain_size**2 * K_B * T / (_NH_ALPHA * D * (M_FE / rho))
+    eta_dis, T_dis = _FE_DISLOCATION
+    dislocation = eta_dis * np.exp(_FE_H / K_B * (1.0 / T_ref - 1.0 / T_dis))
     return np.minimum(diffusion, dislocation)
 
 
-def _liquid_iron_viscosity(T, rho):
-    """Free-volume fit of Li et al. (2021), eq. 12, with V0 = 6.97 A^3 and T0 = 1e4 K.
+# Li et al. (2021) free-volume model, eq. 12: (C_eta, a0, a1, a2, alpha, V0 m3, T0 K).
+# The a coefficients are those that reproduce their AIMD values (Table I). They carry
+# the sign of the diffusion row of Table III, following their v_eta = -v_D.
+_LI21 = (0.313, -0.755, 2.764, -0.168, -0.678, 6.97e-30, 1e4)
 
-    The exponent coefficients are those that reproduce their AIMD values (Table
-    I); they carry the sign of the diffusion row of Table III, v_eta = -v_D.
-    """
+
+def _liquid_iron_viscosity(T, rho):
+    """Liquid Fe viscosity (Pa s) from the free-volume model of Li et al. (2021)."""
+    C, a0, a1, a2, alpha, V0, T0 = _LI21
     n = rho / M_FE
-    phi = n * 6.97e-30
-    v = (-0.755 + 2.764 * phi - 0.168 * phi**2) * (T / 1e4) ** -0.678
-    return n ** (2.0 / 3.0) * np.sqrt(M_FE * K_B * T) * 0.313 * np.exp(v)
+    phi = n * V0
+    v = (a0 + a1 * phi + a2 * phi**2) * (T / T0) ** alpha
+    return n ** (2.0 / 3.0) * np.sqrt(M_FE * K_B * T) * C * np.exp(v)
 
 
 # ln(eta / Pa s) = a0 + a1 P + b0 (1 + P / P_b)^beta / (T - T0), P in GPa, fitted to the
@@ -250,15 +289,20 @@ def _liquid_mgsio3_viscosity(P, T):
     return np.exp(a0 + a1 * p + b0 * (1.0 + p / P_b) ** beta / (T - T0))
 
 
-def viscosity(material, P, T, rho, phase, grain_size=1e-3):
+def viscosity(material, P, T, rho, phase, grain_size=GRAIN_SIZE):
     """Return the viscosity (Pa s) for arrays of P (Pa), T (K), rho, and phase labels.
 
-    ``grain_size`` (m) enters every solid law as d^2. Post-perovskite,
-    bridgmanite, and the pyroxenes follow Tackley et al. (2013) eq. 4 with the
-    post-perovskite upper-bound, perovskite, and upper-mantle rows of Table 2,
-    lowered 100 times to the Earth values they state, at d = 1 mm. This keeps
-    the post-perovskite to bridgmanite contrast of their model.
+    Silicate solids follow Tackley et al. (2013) eq. 4 with the upper-bound
+    post-perovskite, perovskite, and upper-mantle rows of their Table 2, lowered
+    100 times to the Earth values they state, at 1600 K and d = 1 mm, and scale as
+    d^2 with ``grain_size`` d (m). Solid Fe takes the lower of diffusion and
+    dislocation creep after Ritterbex and Tsuchiya (2020), and only its diffusion
+    branch depends on d. Liquid Fe follows Li et al. (2021) and liquid MgSiO3 a
+    fit to Luo and Deng (2025) and Luo et al. (2021). Points without a phase
+    label are NaN.
     """
+    if material not in ('iron', 'mgsio3'):
+        raise ValueError(f'unknown material {material!r}')
     P, T, rho = (np.asarray(a, dtype=float) for a in (P, T, rho))
     phase = np.asarray(phase)
     eta = np.full_like(P, np.nan)
@@ -269,10 +313,12 @@ def viscosity(material, P, T, rho, phase, grain_size=1e-3):
         eta[k] = _iron_viscosity(P[k], T[k], rho[k], grain_size)
         return eta
     eta[liquid] = _liquid_mgsio3_viscosity(P[liquid], T[liquid])
-    k = phase == 'solid-ppv'
-    eta[k] = _tackley_relative(P[k], T[k], grain_size, 1.05e32, 780e3, 1.70e-6, 1100e9)
-    k = phase == 'solid-brg'
-    eta[k] = _tackley_relative(P[k], T[k], grain_size, 3e21, 370e3, 3.65e-6, 200e9)
-    k = np.isin(phase, PYROXENES)
-    eta[k] = _tackley_relative(P[k], T[k], grain_size, 1e19, 300e3, 5.00e-6, np.inf)
+    silicates = (
+        (('solid-ppv',), 'post-perovskite'),
+        (('solid-brg',), 'perovskite'),
+        (PYROXENES, 'upper mantle'),
+    )
+    for labels, row in silicates:
+        k = np.isin(phase, labels)
+        eta[k] = _tackley_viscosity(row, P[k], T[k], grain_size)
     return eta

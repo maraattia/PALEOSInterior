@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy.optimize import brentq
 
-from .constants import M_EARTH, R_EARTH
+from .constants import GRAIN_SIZE, M_EARTH, R_EARTH
 from .structure import NoSolutionError, _integrate, _solve_radius, integrate
 from .tables import Tables, load_tables
 
@@ -93,10 +93,11 @@ class CompatibleLine:
                 continue
         return guess
 
-    def sample(self, n, n_radial=1000, grain_size=1e-3):
+    def sample(self, n, n_radial=1000, grain_size=GRAIN_SIZE):
         """Return ``n`` profiles evenly spaced in T_pot over the solvable interval.
 
-        ``grain_size`` (m) sets the solid viscosities of every profile.
+        ``grain_size`` (m) sets the silicate viscosities and the diffusion-creep
+        branch of solid iron in every profile.
         """
         if not self.solvable:
             raise NoSolutionError('the line has no solvable point to sample')

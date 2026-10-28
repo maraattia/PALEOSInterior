@@ -15,7 +15,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import brentq
 
-from .constants import M_EARTH, P_SURFACE, R_EARTH, R_INNER, G
+from .constants import GRAIN_SIZE, M_EARTH, P_SURFACE, R_EARTH, R_INNER, G
 from .profile import COLUMNS, Profile, derived_columns
 from .rheology import melt_consistent_phase, shear_modulus, viscosity
 from .tables import load_tables
@@ -45,9 +45,6 @@ def _rhs(table):
         return [four_pi * r * r * rho, dP, nabla * T / P * dP]
 
     return rhs
-
-
-MATERIAL = {'mantle': 'mgsio3', 'core': 'iron'}
 
 
 def _layers(mass, cmf, tables):
@@ -169,16 +166,21 @@ def _solve_radius(mass, cmf, T_pot, dT_cmb, tables, tol=TOL_SEARCH, guess=None, 
     return brentq(guarded, lo, hi, xtol=xtol, rtol=1e-12)
 
 
-def integrate(mass, cmf, T_pot, dT_cmb=0.0, tables=None, n_radial=1000, grain_size=1e-3):
+def integrate(
+    mass, cmf, T_pot, dT_cmb=0.0, tables=None, n_radial=1000, grain_size=GRAIN_SIZE
+):
     """Return the converged ``Profile`` of one planet.
 
     ``mass`` is in Earth masses, ``T_pot`` is the 1 bar mantle potential
     temperature (K), and ``dT_cmb`` is a temperature jump added at the
-    core-mantle boundary (K). ``grain_size`` (m) sets the solid viscosities.
-    Profiles run from the surface to ``R_INNER``.
+    core-mantle boundary (K). ``grain_size`` (m) sets the silicate viscosities
+    and the diffusion-creep branch of solid iron. Profiles run from the surface
+    to ``R_INNER``.
     """
     if not 0.0 <= cmf <= 1.0:
         raise ValueError(f'CMF must lie in [0, 1], got {cmf}')
+    if not grain_size > 0.0:
+        raise ValueError(f'grain_size must be positive, got {grain_size}')
     tables = tables or load_tables()
     M = mass * M_EARTH
     R = _solve_radius(M, cmf, T_pot, dT_cmb, tables)
@@ -193,12 +195,12 @@ def integrate(mass, cmf, T_pot, dT_cmb=0.0, tables=None, n_radial=1000, grain_si
         n = max(2, round(n_radial * (top - bottom) / span))
         r = np.linspace(top, bottom, n)
         m, P, T = sol.sol(r)
-        material = MATERIAL[name]
         props = table.evaluate(P, T)
         props['T'] = T
-        props['phase'] = melt_consistent_phase(material, table, P, T, props['phase'])
-        props['mu'] = shear_modulus(P, T, props['rho'], props['phase'])
-        props['eta'] = viscosity(material, P, T, props['rho'], props['phase'], grain_size)
+        phase = melt_consistent_phase(table.material, table, P, T, props['phase'])
+        props['phase'] = phase
+        props['mu'] = shear_modulus(P, T, props['rho'], phase)
+        props['eta'] = viscosity(table.material, P, T, props['rho'], phase, grain_size)
         cols = {'r': r, 'm': m, 'P': P, 'T': T, 'layer': np.full(n, name)}
         keys = ('rho', 'cp', 'cv', 'alpha', 'nabla_ad', 'mu', 'eta', 'phase')
         cols.update({k: props[k] for k in keys})

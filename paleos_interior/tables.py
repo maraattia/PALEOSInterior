@@ -66,11 +66,12 @@ class MaterialTable:
 
     Grid points the table omits (non-convergent MgSiO3 points) are NaN, and any
     interpolation touching them returns NaN. Queries outside the grid are
-    clamped to its edges.
+    clamped to its edges. ``material`` is 'iron' or 'mgsio3'.
     """
 
-    def __init__(self, path):
+    def __init__(self, path, material):
         self.path = Path(path)
+        self.material = material
         data = np.loadtxt(path, comments='#', usecols=range(9))
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', UserWarning)
@@ -199,4 +200,8 @@ def load_tables(table_dir=None):
         else:
             paths[material] = Path(table_dir).expanduser() / name
     checksums = {k: _md5(path) for k, path in paths.items()}
-    return Tables(MaterialTable(paths['iron']), MaterialTable(paths['mgsio3']), checksums)
+    return Tables(
+        MaterialTable(paths['iron'], 'iron'),
+        MaterialTable(paths['mgsio3'], 'mgsio3'),
+        checksums,
+    )
