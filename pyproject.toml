@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "paleos-interior"
-version = "0.1.0"
+version = "1.0.0"
 description = "Interior profiles of rocky planets compatible with a measured mass and radius, built on the PALEOS equations of state"
 readme = "README.md"
 license = { file = "LICENSE" }

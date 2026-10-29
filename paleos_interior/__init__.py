@@ -4,7 +4,7 @@ Two-layer planets (Fe core under an MgSiO3 mantle) in hydrostatic equilibrium on
 adiabat, with material properties interpolated from the PALEOS lookup tables.
 """
 
-__version__ = '0.1.0'
+__version__ = '1.0.0'
 
 from .line import CompatibleLine, compatible_envelope, compatible_line
 from .result import InteriorResult, interior_profiles
