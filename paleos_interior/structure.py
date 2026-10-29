@@ -72,7 +72,8 @@ def _check_inputs(tables, mass=1.0, radius=1.0, T_pot=(), count=None):
         raise ValueError(f'radius must be positive, got {radius}')
     lo, hi = (10.0**x for x in tables.mgsio3.log_t_range)
     for T in np.atleast_1d(T_pot):
-        if not lo <= T <= hi:
+        # The grid edges come back from log10 with rounding, so allow 1e-9 relative.
+        if not lo * (1.0 - 1e-9) <= T <= hi * (1.0 + 1e-9):
             raise ValueError(f'T_pot must lie between {lo:.0f} and {hi:.0f} K, got {T}')
     if count is not None:
         name, value, minimum = count
