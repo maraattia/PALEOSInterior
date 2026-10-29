@@ -1,0 +1,44 @@
+cff-version: 1.2.0
+message: >-
+  If you use paleos-interior, please cite the PALEOS paper below, which describes
+  the equations of state behind every profile, and this software.
+title: PALEOSInterior
+abstract: >-
+  Interior profiles of rocky planets compatible with a measured mass and radius:
+  an iron core under an MgSiO3 mantle in hydrostatic equilibrium on an adiabat,
+  with material properties from the PALEOS equation-of-state tables.
+type: software
+authors:
+  - family-names: Attia
+    given-names: Mara
+    orcid: "https://orcid.org/0000-0002-7971-7439"
+version: 1.0.0
+license: BSD-3-Clause
+repository-code: "https://github.com/maraattia/PALEOSInterior"
+keywords:
+  - exoplanets
+  - planetary interiors
+  - equation of state
+  - mass-radius relation
+preferred-citation:
+  type: article
+  title: "PALEOS: Multiphase equations of state and mass-radius relations for exoplanet interiors"
+  authors:
+    - family-names: Attia
+      given-names: Mara
+      orcid: "https://orcid.org/0000-0002-7971-7439"
+    - family-names: Lichtenberg
+      given-names: Tim
+      orcid: "https://orcid.org/0000-0002-3286-7683"
+    - family-names: Jungová
+      given-names: Ema
+      orcid: "https://orcid.org/0009-0009-0577-5757"
+    - family-names: Sastre
+      given-names: Mariana
+      orcid: "https://orcid.org/0009-0008-7799-7976"
+  journal: Astronomy & Astrophysics
+  volume: 713
+  start: A225
+  year: 2026
+  month: 9
+  doi: 10.1051/0004-6361/202660790
