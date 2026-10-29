@@ -238,19 +238,20 @@ def _rejection_message(line, n_line):
         T, _, R_lim = max(too_large, key=lambda x: x[2])
         deficit = 1.0 - R_lim / line.radius
         parts.append(
-            f'At those T_pot the largest rocky interior, pure MgSiO3 at T_pot = {T:.0f} K, has '
-            f'R = {R_lim / R_EARTH:.4f} Earth radii, {100 * deficit:.1f}% below the '
-            'measured radius. With a pure Fe core and an MgSiO3 mantle on an adiabat, '
-            'the measured radius needs material less dense than MgSiO3, such as an '
-            'atmosphere or a volatile layer, above a smaller interior.'
+            f'At {_span([x[0] for x in too_large])} even a pure MgSiO3 planet is too small: '
+            f'at T_pot = {T:.0f} K it has R = {R_lim / R_EARTH:.4f} Earth radii, '
+            f'{100 * deficit:.1f}% below the measured radius. There, the measured radius '
+            'needs material less dense than MgSiO3, such as an atmosphere or a volatile '
+            'layer, above a smaller Fe-MgSiO3 interior.'
         )
     if too_small:
         T, _, R_lim = min(too_small, key=lambda x: x[2])
         excess = R_lim / line.radius - 1.0
         parts.append(
-            f'At those T_pot the smallest interior, pure iron at T_pot = {T:.0f} K, has '
-            f'R = {R_lim / R_EARTH:.4f} Earth radii, {100 * excess:.1f}% above the '
-            'measured radius, so the planet is denser than pure iron allows.'
+            f'At {_span([x[0] for x in too_small])} even a pure iron planet is too large: '
+            f'at T_pot = {T:.0f} K it has R = {R_lim / R_EARTH:.4f} Earth radii, '
+            f'{100 * excess:.1f}% above the measured radius, so there the planet is denser '
+            'than pure iron allows.'
         )
     outside = [x[0] for x in line.rejected if x[1] == OUTSIDE]
     if outside:
