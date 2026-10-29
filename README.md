@@ -53,13 +53,15 @@ Mass and radius take a single value, a `(value, sigma)` pair, or `(value, sigma_
 
 `T_pot` is a required `(min, max)` pair. The plausible range of the mantle potential temperature depends on the planet's age, irradiation, and tidal heating, so the package sets no default. The compatible line is solved at `n_line` (default 12) evenly spaced values across it. A hotter mantle is less dense, so at fixed mass and radius $\mathrm{CMF}$ rises with $T_\mathrm{pot}$ , and the range chosen sets the range of $\mathrm{CMF}$ reported.
 
+$T_\mathrm{pot}$ must lie between 300 K and $10^{5}$ K, the temperature range of the tables. The PALEOS MgSiO₃ table has no data at low pressure above about 4800 K, and an adiabat that enters that region raises `OutsideTablesError`, a subclass of `NoSolutionError`. For planets of a few Earth masses this caps $T_\mathrm{pot}$ near 4750 K. `compatible_line` keeps the values of $T_\mathrm{pot}$ that can be solved and lists the others as rejected.
+
 ### Measurement uncertainties
 
 The profiles sit on the line at the nominal mass and radius. The uncertainties enter through two more lines, at the corners of the 1 $\sigma$ box with the highest and lowest bulk density. At fixed $T_\mathrm{pot}$ , $\mathrm{CMF}$ rises with mass and falls with radius, so these corners bound the $\mathrm{CMF}$ of every mass and radius in the box. This holds at every point of a 5 by 5 grid across the boxes of Kepler-80 d and e at $T_\mathrm{pot}$ from 1000 to 4500 K, and is expected wherever the radius grows with mass at fixed composition. The uncertainties are not propagated into the profiles.
 
 ### When there is no rocky solution
 
-If no Fe-MgSiO₃ interior reproduces the mass and radius anywhere in the `T_pot` range, `compatible_line` and `interior_profiles` raise `NoSolutionError`. The message names the bounding case: the largest rocky planet of that mass (pure MgSiO₃ at the hottest $T_\mathrm{pot}$ ) when the radius is too large, or the smallest (pure iron) when it is too small. A radius too large for any rocky interior needs material less dense than MgSiO₃, such as an atmosphere or a volatile layer, which this package does not model. When only part of the range has a solution, the line covers that part and a `UserWarning` explains the rest. An envelope corner with no solution gives an empty line, recorded in `envelope.csv`.
+If no Fe-MgSiO₃ interior reproduces the mass and radius anywhere in the `T_pot` range, `compatible_line` and `interior_profiles` raise `NoSolutionError`. The message names the bounding case: the largest rocky planet of that mass (pure MgSiO₃ at the hottest $T_\mathrm{pot}$ ) when the radius is too large, or the smallest (pure iron) when it is too small. A radius too large for any rocky interior needs material less dense than MgSiO₃, such as an atmosphere or a volatile layer, which this package does not model. When only part of the range has a solution, the line covers that part and a `UserWarning` explains the rest, including any $T_\mathrm{pot}$ at which the adiabat leaves the tables. An envelope corner with no solution gives an empty line, recorded in `envelope.csv`.
 
 ## Functions
 
@@ -142,7 +144,7 @@ The Kepler-80 masses and radii in the tutorial and quick start are from MacDonal
 ## Related
 
 - PALEOS library: https://github.com/maraattia/PALEOS
-- PALEOS lookup tables: https://doi.org/10.5281/zenodo.19000315
+- PALEOS lookup tables, all releases: https://doi.org/10.5281/zenodo.19000315 (this package uses release 1.3.0, doi:10.5281/zenodo.22776069)
 
 ## License
 
