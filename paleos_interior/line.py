@@ -101,7 +101,10 @@ class CompatibleLine:
                 return brentq(f, lo, hi, xtol=CMF_TOL)
             except ValueError:
                 continue
-        return guess
+        raise NoSolutionError(
+            f'no CMF reproduces the radius at T_pot = {T_pot:.0f} K, inside the sampled '
+            'interval of the line'
+        )
 
     def sample(self, n, n_radial=1000, grain_size=GRAIN_SIZE):
         """Return ``n`` profiles evenly spaced in T_pot over the solvable interval.
