@@ -227,9 +227,14 @@ def integrate(
         raise ValueError(f'grain_size must be positive, got {grain_size}')
     tables = tables or load_tables()
     _check_inputs(tables, mass=mass, T_pot=T_pot, count=('n_radial', n_radial, 2))
-    M = mass * M_EARTH
-    R = _solve_radius(M, cmf, T_pot, dT_cmb, tables)
-    R = _solve_radius(M, cmf, T_pot, dT_cmb, tables, TOL_PROFILE, guess=R, xtol=0.01)
+    return _profile(mass * M_EARTH, cmf, T_pot, dT_cmb, tables, n_radial, grain_size)
+
+
+def _profile(M, cmf, T_pot, dT_cmb, tables, n_radial, grain_size, guess=None):
+    """Build the Profile of a planet of mass M (kg), starting the radius solve at guess (m)."""
+    if guess is None:
+        guess = _solve_radius(M, cmf, T_pot, dT_cmb, tables)
+    R = _solve_radius(M, cmf, T_pot, dT_cmb, tables, TOL_PROFILE, guess=guess, xtol=0.01)
     _, solutions = _integrate(R, M, cmf, T_pot, dT_cmb, tables, TOL_PROFILE, dense=True)
 
     tops = [R] + [sol.t_events[0][0] for _, _, sol in solutions[:-1]]

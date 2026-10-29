@@ -14,12 +14,13 @@ from scipy.optimize import brentq
 
 from .constants import GRAIN_SIZE, M_EARTH, R_EARTH
 from .structure import (
+    TOL_SEARCH,
     NoSolutionError,
     OutsideTablesError,
     _check_inputs,
     _integrate,
+    _profile,
     _solve_radius,
-    integrate,
 )
 from .tables import Tables, load_tables
 
@@ -87,14 +88,21 @@ class CompatibleLine:
         """CMF on the line at T_pot, interpolated linearly between solved points."""
         return np.interp(T_pot, self.T_pot, self.cmf)
 
-    def _cmf_exact(self, T_pot, radius_map):
+    def _cmf_exact(self, T_pot):
         nearest = np.flatnonzero(np.isclose(self.T_pot, T_pot, rtol=0.0, atol=1e-6))
         if nearest.size:
             return float(self.cmf[nearest[0]])
         guess = float(self.cmf_at(T_pot))
 
+        # The mass left at the center of a planet of the observed radius changes
+        # sign at the CMF on the line, so one integration per step suffices.
         def f(c):
-            return radius_map(c, T_pot) - self.radius
+            value, _ = _integrate(
+                self.radius, self.mass, c, T_pot, self.dT_cmb, self.tables, TOL_SEARCH
+            )
+            if math.isnan(value):
+                raise NoSolutionError(f'integration failed at T_pot = {T_pot:.0f} K')
+            return value
 
         for lo, hi in ((max(0.0, guess - 0.02), min(1.0, guess + 0.02)), (0.0, 1.0)):
             try:
@@ -121,21 +129,16 @@ class CompatibleLine:
             temperatures = [lo]
         else:
             temperatures = np.linspace(lo, hi, n) if n > 1 else [0.5 * (lo + hi)]
-        radius_map = _RadiusMap(self.mass, self.dT_cmb, self.tables)
+        _check_inputs(self.tables, count=('n_radial', n_radial, 2))
         profiles = []
         for T in temperatures:
-            cmf = self._cmf_exact(float(T), radius_map)
+            cmf = self._cmf_exact(float(T))
             profiles.append(
-                integrate(
-                    self.mass / M_EARTH,
-                    cmf,
-                    float(T),
-                    self.dT_cmb,
-                    self.tables,
-                    n_radial,
-                    grain_size,
+                _profile(
+                    self.mass, cmf, float(T), self.dT_cmb, self.tables, n_radial,
+                    grain_size, guess=self.radius,
                 )
-            )
+            )  # fmt: skip
         return profiles
 
 
