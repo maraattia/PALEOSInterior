@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/paleos_logo.png" alt="PALEOS logo" width="200">
+</p>
+
 # PALEOSInterior
 
 Interior profiles of rocky exoplanets compatible with a measured mass and radius. The package builds two-layer planets, an iron core under an MgSiO₃ mantle, in hydrostatic equilibrium with an adiabatic temperature profile, using the [PALEOS](https://github.com/maraattia/PALEOS) equations of state ([Attia et al. 2026](https://scixplorer.org/abs/2026A%26A...713A.225A/abstract)) through their published lookup tables. For a given mass and radius, a rocky interior is degenerate between the core mass fraction, $\mathrm{CMF}$ , and the mantle potential temperature, $T_\mathrm{pot}$ . The package finds the line of ( $T_\mathrm{pot}$ , $\mathrm{CMF}$ ) pairs that reproduce the observed radius, brackets it with the measurement uncertainties, and returns radial profiles sampled along it, including bulk and shear moduli, seismic wave speeds, and viscosity.
