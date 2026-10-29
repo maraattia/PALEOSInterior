@@ -45,7 +45,7 @@ SOURCES = (
     (
         'Viscosity of solid Fe: lower of Nabarro-Herring diffusion creep and dislocation '
         'creep from Ritterbex & Tsuchiya (2020) at equal T/T_m. Dislocation creep does not '
-        'depend on grain size and sets the value for grains above about 0.3 mm'
+        'depend on grain size and sets the value for grains above about 0.05 mm'
     ),
     (
         'Viscosity of liquids: Fe from the Li et al. (2021) free-volume model with the '
@@ -287,7 +287,7 @@ def _iron_viscosity(P, T, rho, grain_size):
     Diffusion creep is eta = d^2 k T / (alpha D Omega) with alpha = 40/3. The
     dislocation branch is the Weertman-creep viscosity of Ritterbex and Tsuchiya
     (2020) at 5500 K and 360 GPa, scaled as 1 / D at equal T / T_m. It does not
-    depend on grain size and is the lower branch for grains above about 0.3 mm.
+    depend on grain size and is the lower branch for grains above about 0.05 mm.
     """
     T_ref = T / melting_temperature('iron', P) * _FE_TM_REF
     D = _iron_diffusivity(T_ref, rho)
