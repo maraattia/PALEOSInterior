@@ -13,7 +13,13 @@ import numpy as np
 from scipy.optimize import brentq
 
 from .constants import GRAIN_SIZE, M_EARTH, R_EARTH
-from .structure import NoSolutionError, _integrate, _solve_radius, integrate
+from .structure import (
+    NoSolutionError,
+    OutsideTablesError,
+    _integrate,
+    _solve_radius,
+    integrate,
+)
 from .tables import Tables, load_tables
 
 CMF_TOL = 1e-5
@@ -21,6 +27,8 @@ T_TOL = 1.0  # K
 
 TOO_LARGE = 'larger than a pure MgSiO3 planet'
 TOO_SMALL = 'smaller than a pure iron planet'
+OUTSIDE = 'outside the PALEOS tables'
+UNSOLVED = 'no converged structure'
 
 
 class _RadiusMap:
@@ -49,7 +57,8 @@ class CompatibleLine:
     T_pot interval when it is narrower than the requested range. ``rejected``
     lists the requested T_pot values without a solution as (T_pot, reason,
     R_limit), where R_limit (m) is the radius of the pure MgSiO3 or pure iron
-    planet that bounds the rocky radii at that T_pot.
+    planet that bounds the rocky radii at that T_pot, or NaN where no planet can
+    be built because the adiabat leaves the tables or the radius search fails.
     """
 
     mass: float
@@ -123,11 +132,16 @@ class CompatibleLine:
 
 def _node(radius_map, R_obs, T):
     """Return (CMF, None) on the line at T, or (None, reason) if there is none."""
-    if radius_map(0.0, T) < R_obs:
-        return None, TOO_LARGE
-    if radius_map(1.0, T) > R_obs:
-        return None, TOO_SMALL
-    cmf = brentq(lambda c: radius_map(c, T) - R_obs, 0.0, 1.0, xtol=CMF_TOL)
+    try:
+        if radius_map(0.0, T) < R_obs:
+            return None, TOO_LARGE
+        if radius_map(1.0, T) > R_obs:
+            return None, TOO_SMALL
+        cmf = brentq(lambda c: radius_map(c, T) - R_obs, 0.0, 1.0, xtol=CMF_TOL)
+    except OutsideTablesError:
+        return None, OUTSIDE
+    except NoSolutionError:
+        return None, UNSOLVED
     return cmf, None
 
 
@@ -162,6 +176,9 @@ def _trace(mass, radius, T_pot, dT_cmb, n_line, tables):
 
     points = [(T, c) for T, c, _ in nodes if c is not None]
     for (T_a, _, why_a), (T_b, _, why_b) in itertools.pairwise(nodes):
+        # CMF 0 and 1 edges are searched for; past an unsolvable node the line stops.
+        if {why_a, why_b} & {OUTSIDE, UNSOLVED}:
+            continue
         edges = {why_a, why_b} - {None} if why_a != why_b else set()
         for reason in edges:
             points.append(_edge(radius_map, R_obs, reason, T_a, T_b))
@@ -170,8 +187,9 @@ def _trace(mass, radius, T_pot, dT_cmb, n_line, tables):
     T_line = np.array([p[0] for p in points])
     cmf_line = np.array([p[1] for p in points])
     cmb = np.array([_cmb(radius_map, c, T) for T, c in points]).reshape(-1, 3)
+    limit = {TOO_LARGE: 0.0, TOO_SMALL: 1.0}
     rejected = [
-        (T, why, radius_map(0.0 if why == TOO_LARGE else 1.0, T))
+        (T, why, radius_map(limit[why], T) if why in limit else math.nan)
         for T, c, why in nodes
         if c is None
     ]
@@ -234,7 +252,21 @@ def _rejection_message(line, n_line):
             f'R = {R_lim / R_EARTH:.4f} Earth radii, {100 * excess:.1f}% above the '
             'measured radius, so the planet is denser than pure iron allows.'
         )
+    outside = [x[0] for x in line.rejected if x[1] == OUTSIDE]
+    if outside:
+        parts.append(
+            f'At {_span(outside)} the adiabat enters a region where the PALEOS tables '
+            'have no data, so no planet can be built there.'
+        )
+    unsolved = [x[0] for x in line.rejected if x[1] == UNSOLVED]
+    if unsolved:
+        parts.append(f'At {_span(unsolved)} the radius search did not converge.')
     return ' '.join(parts)
+
+
+def _span(temperatures):
+    lo, hi = min(temperatures), max(temperatures)
+    return f'T_pot = {lo:.0f} K' if lo == hi else f'T_pot from {lo:.0f} to {hi:.0f} K'
 
 
 def _uncertain(x, name):
