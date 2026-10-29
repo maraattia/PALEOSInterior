@@ -11,6 +11,7 @@ from .constants import GRAIN_SIZE, M_EARTH, P_SURFACE, R_EARTH, R_INNER
 from .line import _uncertain, compatible_envelope, compatible_line
 from .profile import COLUMNS
 from .rheology import SOURCES
+from .structure import _check_inputs
 from .tables import load_tables
 
 LINE_COLUMNS = (
@@ -184,6 +185,8 @@ def interior_profiles(
     if not grain_size > 0.0:
         raise ValueError(f'grain_size must be positive, got {grain_size}')
     tables = load_tables(table_dir)
+    _check_inputs(tables, count=('n_profiles', n_profiles, 1))
+    _check_inputs(tables, count=('n_radial', n_radial, 2))
     M = _uncertain(mass, 'mass')
     R = _uncertain(radius, 'radius')
     line = compatible_line(M[0], R[0], T_pot, dT_cmb, n_line, tables)

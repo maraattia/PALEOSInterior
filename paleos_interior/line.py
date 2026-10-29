@@ -16,6 +16,7 @@ from .constants import GRAIN_SIZE, M_EARTH, R_EARTH
 from .structure import (
     NoSolutionError,
     OutsideTablesError,
+    _check_inputs,
     _integrate,
     _solve_radius,
     integrate,
@@ -106,12 +107,17 @@ class CompatibleLine:
         """Return ``n`` profiles evenly spaced in T_pot over the solvable interval.
 
         ``grain_size`` (m) sets the silicate viscosities and the diffusion-creep
-        branch of solid iron in every profile.
+        branch of solid iron in every profile. A line solvable at a single T_pot
+        gives one profile.
         """
+        _check_inputs(self.tables, count=('n', n, 1))
         if not self.solvable:
             raise NoSolutionError('the line has no solvable point to sample')
         lo, hi = self.T_range
-        temperatures = np.linspace(lo, hi, n) if n > 1 else [0.5 * (lo + hi)]
+        if lo == hi:
+            temperatures = [lo]
+        else:
+            temperatures = np.linspace(lo, hi, n) if n > 1 else [0.5 * (lo + hi)]
         radius_map = _RadiusMap(self.mass, self.dT_cmb, self.tables)
         profiles = []
         for T in temperatures:
@@ -169,9 +175,16 @@ def _cmb(radius_map, cmf, T):
 
 def _trace(mass, radius, T_pot, dT_cmb, n_line, tables):
     T_min, T_max = sorted(float(t) for t in T_pot)
+    if T_min == T_max:
+        _check_inputs(tables, mass, radius, T_min, ('n_line', n_line, 1))
+        grid = np.array([T_min])
+    else:
+        _check_inputs(
+            tables, mass, radius, (T_min, T_max), ('n_line for a T_pot range', n_line, 2)
+        )
+        grid = np.linspace(T_min, T_max, n_line)
     M, R_obs = mass * M_EARTH, radius * R_EARTH
     radius_map = _RadiusMap(M, dT_cmb, tables)
-    grid = np.linspace(T_min, T_max, n_line)
     nodes = [(T, *_node(radius_map, R_obs, T)) for T in grid]
 
     points = [(T, c) for T, c, _ in nodes if c is not None]
@@ -210,6 +223,8 @@ def compatible_line(mass, radius, T_pot, dT_cmb=0.0, n_line=12, tables=None):
     """
     tables = tables or load_tables()
     line = _trace(mass, radius, T_pot, dT_cmb, n_line, tables)
+    if line.T_requested[0] == line.T_requested[1]:
+        n_line = 1
     if not line.solvable:
         raise NoSolutionError(_rejection_message(line, n_line))
     if line.rejected:
@@ -292,6 +307,11 @@ def compatible_envelope(mass, radius, T_pot, dT_cmb=0.0, n_line=12, tables=None)
     M, M_minus, M_plus = _uncertain(mass, 'mass')
     R, R_minus, R_plus = _uncertain(radius, 'radius')
     corners = {'dense': (M + M_plus, R - R_minus), 'light': (M - M_minus, R + R_plus)}
+    for key, (m, r) in corners.items():
+        if not (m > 0.0 and r > 0.0):
+            raise ValueError(
+                f'the {key} corner has M = {m:g} and R = {r:g}, not both positive'
+            )
     return {
         key: _trace(m, r, T_pot, dT_cmb, n_line, tables) for key, (m, r) in corners.items()
     }

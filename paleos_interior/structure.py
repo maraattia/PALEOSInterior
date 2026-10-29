@@ -61,6 +61,27 @@ def _rhs(table):
     return rhs
 
 
+def _check_inputs(tables, mass=1.0, radius=1.0, T_pot=(), count=None):
+    """Raise ValueError for a non-positive mass or radius, or T_pot off the tables.
+
+    ``count`` is an optional (name, value, minimum) for an integer argument.
+    """
+    if not mass > 0.0:
+        raise ValueError(f'mass must be positive, got {mass}')
+    if not radius > 0.0:
+        raise ValueError(f'radius must be positive, got {radius}')
+    lo, hi = (10.0**x for x in tables.mgsio3.log_t_range)
+    for T in np.atleast_1d(T_pot):
+        if not lo <= T <= hi:
+            raise ValueError(f'T_pot must lie between {lo:.0f} and {hi:.0f} K, got {T}')
+    if count is not None:
+        name, value, minimum = count
+        if not (isinstance(value, (int, np.integer)) and value >= minimum):
+            raise ValueError(
+                f'{name} must be an integer of at least {minimum}, got {value}'
+            )
+
+
 def _layers(mass, cmf, tables):
     """Return (name, table, enclosed mass at the layer bottom), outermost first."""
     layers = []
@@ -205,6 +226,7 @@ def integrate(
     if not grain_size > 0.0:
         raise ValueError(f'grain_size must be positive, got {grain_size}')
     tables = tables or load_tables()
+    _check_inputs(tables, mass=mass, T_pot=T_pot, count=('n_radial', n_radial, 2))
     M = mass * M_EARTH
     R = _solve_radius(M, cmf, T_pot, dT_cmb, tables)
     R = _solve_radius(M, cmf, T_pot, dT_cmb, tables, TOL_PROFILE, guess=R, xtol=0.01)
