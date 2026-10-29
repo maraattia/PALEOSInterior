@@ -30,6 +30,20 @@ class NoSolutionError(RuntimeError):
     """Raised when no radius reproduces the requested planet."""
 
 
+_NAMES = {'iron': 'iron', 'mgsio3': 'MgSiO3'}
+
+
+class OutsideTablesError(NoSolutionError):
+    """Raised when an adiabat enters a region the PALEOS tables do not cover."""
+
+
+def _first_missing(table, y):
+    """Return the first (P, T) of an integrated path with no table data, or None."""
+    rho = table.evaluate(y[1], y[2])['rho']
+    missing = np.flatnonzero(np.isnan(rho))
+    return None if not missing.size else (y[1, missing[0]], y[2, missing[0]])
+
+
 def _rhs(table):
     rho_nabla = table.rho_nabla
     four_pi = 4.0 * math.pi
@@ -85,6 +99,14 @@ def _integrate(R, mass, cmf, T_pot, dT_cmb, tables, tol, dense=False):
         solutions.append((name, table, sol))
         if not sol.success:
             return math.nan, solutions
+        # The right-hand side is zero on missing cells, so check the accepted path.
+        missing = _first_missing(table, sol.y)
+        if missing is not None:
+            P, T = missing
+            raise OutsideTablesError(
+                f'the {name} adiabat reaches P = {P / 1e9:.3g} GPa and T = {T:.0f} K, '
+                f'where the PALEOS {_NAMES[table.material]} table has no data'
+            )
         hit = sol.t_events[0]
         if last:
             if hit.size:
@@ -175,7 +197,8 @@ def integrate(
     temperature (K), and ``dT_cmb`` is a temperature jump added at the
     core-mantle boundary (K). ``grain_size`` (m) sets the silicate viscosities
     and the diffusion-creep branch of solid iron. Profiles run from the surface
-    to ``R_INNER``.
+    to ``R_INNER``. Raises ``OutsideTablesError`` when the adiabat enters a
+    region the PALEOS tables do not cover.
     """
     if not 0.0 <= cmf <= 1.0:
         raise ValueError(f'CMF must lie in [0, 1], got {cmf}')
