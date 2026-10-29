@@ -11,7 +11,9 @@ The result is (1 - s) times the solid value plus s times the liquid value, with 
 rising linearly from 0 to 1 across MELT_BLEND (in log10 T) about the melting
 temperature. Solid and liquid properties are averaged only inside that band, which
 keeps the structure equations continuous where an adiabat follows the melting curve,
-and away from the curve the interpolation is plain bilinear.
+and away from the curve the interpolation is plain bilinear. The blend applies to rho
+and nabla_ad. C_P, C_V, and alpha, which enter the bulk moduli nonlinearly, take the
+interpolant of the point's own phase, so the moduli of the two phases are never mixed.
 """
 
 import hashlib
@@ -40,6 +42,7 @@ RELEASE = {
 PROPERTIES = ('rho', 'cp', 'cv', 'alpha', 'nabla_ad')
 _COLUMNS = {'rho': 2, 'cp': 5, 'cv': 6, 'alpha': 7, 'nabla_ad': 8}
 _EXTEND = 3  # nodes each phase is continued past the melting curve
+_BLENDED = ('rho', 'nabla_ad')
 
 
 def cache_dir():
@@ -176,9 +179,12 @@ class MaterialTable:
                 args = (i[near], j[near], fx[near], fy[near])
                 solid = _bilinear(self.solid_grids[key], *args)
                 liquid = _bilinear(self.liquid_grids[key], *args)
-                solid = np.where(s < 1.0, solid, 0.0)
-                liquid = np.where(s > 0.0, liquid, 0.0)
-                out[key][near] = (1.0 - s) * solid + s * liquid
+                if key in _BLENDED:
+                    solid = np.where(s < 1.0, solid, 0.0)
+                    liquid = np.where(s > 0.0, liquid, 0.0)
+                    out[key][near] = (1.0 - s) * solid + s * liquid
+                else:
+                    out[key][near] = np.where(s > 0.5, liquid, solid)
         codes = self._phase_grid[np.rint(x).astype(int), np.rint(y).astype(int)]
         out['phase'] = np.where(codes >= 0, self.phase_names[codes], '').astype('<U32')
         return out
