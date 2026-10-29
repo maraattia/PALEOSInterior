@@ -11,4 +11,5 @@ R_GAS = 8.314462618  # molar gas constant, J mol-1 K-1
 EV = 1.602176634e-19  # electronvolt (SI 2019, exact), J
 AMU = 1.66053906660e-27  # atomic mass constant, CODATA 2018, kg
 
+MELT_BLEND = 0.002  # half-width in log10 T of the solid-liquid blend at the melting curve
 GRAIN_SIZE = 1e-3  # default grain size of the solid viscosity laws, m

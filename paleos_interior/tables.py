@@ -3,6 +3,15 @@
 The tables are log-uniform grids in pressure and temperature with the columns
 P, T, rho, u, s, C_P, C_V, alpha, nabla_ad, phase (SI units). Properties are
 interpolated bilinearly in (log10 P, log10 T), as the table headers prescribe.
+
+Near the melting curve each phase is continued a few nodes into the other along
+every pressure row, by linear extrapolation in log10 T, so that solid and liquid
+properties can each be interpolated without mixing in nodes of the other phase.
+The result is (1 - s) times the solid value plus s times the liquid value, with s
+rising linearly from 0 to 1 across MELT_BLEND (in log10 T) about the melting
+temperature. Solid and liquid properties are averaged only inside that band, which
+keeps the structure equations continuous where an adiabat follows the melting curve,
+and away from the curve the interpolation is plain bilinear.
 """
 
 import hashlib
@@ -14,6 +23,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+
+from .constants import MELT_BLEND
+from .rheology import melting_temperature
 
 RELEASE = {
     'version': '1.3.0',
@@ -27,6 +39,7 @@ RELEASE = {
 
 PROPERTIES = ('rho', 'cp', 'cv', 'alpha', 'nabla_ad')
 _COLUMNS = {'rho': 2, 'cp': 5, 'cv': 6, 'alpha': 7, 'nabla_ad': 8}
+_EXTEND = 3  # nodes each phase is continued past the melting curve
 
 
 def cache_dir():
@@ -97,9 +110,25 @@ class MaterialTable:
         self.phase_names, codes = np.unique(phase, return_inverse=True)
         self._phase_grid = np.full((self._n_p, self._n_t), -1, dtype=int)
         self._phase_grid[i, j] = codes
+        # Node class: 1 liquid, 0 solid, -1 missing. Every pressure row holds solid
+        # nodes below liquid ones, and the labels agree with the melting curve.
+        is_liquid = np.isin(self._phase_grid, np.flatnonzero(self.phase_names == 'liquid'))
+        node_class = np.where(self._phase_grid < 0, -1, is_liquid.astype(int))
+        self.solid_grids = {k: _extend(g, node_class, 0) for k, g in self.grids.items()}
+        self.liquid_grids = {k: _extend(g, node_class, 1) for k, g in self.grids.items()}
+        both = np.isfinite(self.solid_grids['rho']) & np.isfinite(self.liquid_grids['rho'])
+        self._near_melt = both[:-1, :-1] & both[:-1, 1:] & both[1:, :-1] & both[1:, 1:]
+        self._log_tm_grid = np.log10(melting_temperature(material, 10.0**axis_p))
+
         # Plain nested lists make scalar lookups in the ODE right-hand side fast.
         self._rho = self.grids['rho'].tolist()
         self._nabla = self.grids['nabla_ad'].tolist()
+        self._rho_s = self.solid_grids['rho'].tolist()
+        self._nabla_s = self.solid_grids['nabla_ad'].tolist()
+        self._rho_l = self.liquid_grids['rho'].tolist()
+        self._nabla_l = self.liquid_grids['nabla_ad'].tolist()
+        self._near = self._near_melt.tolist()
+        self._log_tm = self._log_tm_grid.tolist()
 
     def _cell(self, P, T):
         x = (math.log10(P) - self._p0) / self._step_p
@@ -113,12 +142,18 @@ class MaterialTable:
     def rho_nabla(self, P, T):
         """Return (density, adiabatic gradient) at one (P, T) point."""
         i, j, fx, fy = self._cell(P, T)
-        out = []
-        for g in (self._rho, self._nabla):
-            lo = g[i][j] + fy * (g[i][j + 1] - g[i][j])
-            hi = g[i + 1][j] + fy * (g[i + 1][j + 1] - g[i + 1][j])
-            out.append(lo + fx * (hi - lo))
-        return out[0], out[1]
+        if not self._near[i][j]:
+            return _bilinear(self._rho, i, j, fx, fy), _bilinear(self._nabla, i, j, fx, fy)
+        log_tm = self._log_tm[i] + fx * (self._log_tm[i + 1] - self._log_tm[i])
+        s = min(max(0.5 + (math.log10(T) - log_tm) / (2.0 * MELT_BLEND), 0.0), 1.0)
+        rho = nabla = 0.0
+        if s < 1.0:
+            rho += (1.0 - s) * _bilinear(self._rho_s, i, j, fx, fy)
+            nabla += (1.0 - s) * _bilinear(self._nabla_s, i, j, fx, fy)
+        if s > 0.0:
+            rho += s * _bilinear(self._rho_l, i, j, fx, fy)
+            nabla += s * _bilinear(self._nabla_l, i, j, fx, fy)
+        return rho, nabla
 
     def evaluate(self, P, T):
         """Return a dict of property arrays and phase labels on arrays of (P, T)."""
@@ -129,11 +164,21 @@ class MaterialTable:
         i = np.minimum(x.astype(int), self._n_p - 2)
         j = np.minimum(y.astype(int), self._n_t - 2)
         fx, fy = x - i, y - j
+        near = self._near_melt[i, j]
+        tm = self._log_tm_grid
+        log_tm = tm[i] + fx * (tm[i + 1] - tm[i])
+        s = np.clip(0.5 + (np.log10(T) - log_tm) / (2.0 * MELT_BLEND), 0.0, 1.0)
+        s = s[near]
         out = {}
         for key, g in self.grids.items():
-            lo = g[i, j] + fy * (g[i, j + 1] - g[i, j])
-            hi = g[i + 1, j] + fy * (g[i + 1, j + 1] - g[i + 1, j])
-            out[key] = lo + fx * (hi - lo)
+            out[key] = _bilinear(g, i, j, fx, fy)
+            if near.any():
+                args = (i[near], j[near], fx[near], fy[near])
+                solid = _bilinear(self.solid_grids[key], *args)
+                liquid = _bilinear(self.liquid_grids[key], *args)
+                solid = np.where(s < 1.0, solid, 0.0)
+                liquid = np.where(s > 0.0, liquid, 0.0)
+                out[key][near] = (1.0 - s) * solid + s * liquid
         codes = self._phase_grid[np.rint(x).astype(int), np.rint(y).astype(int)]
         out['phase'] = np.where(codes >= 0, self.phase_names[codes], '').astype('<U32')
         return out
@@ -151,6 +196,42 @@ class MaterialTable:
             solid = [c for c in row if c >= 0 and names[c] != 'liquid']
             out.append(names[solid[0]] if solid else '')
         return np.array(out, dtype='<U32')
+
+
+def _bilinear(g, i, j, fx, fy):
+    """Bilinear interpolation on grid g (nested list or array) in cell (i, j)."""
+    if isinstance(g, list):
+        lo = g[i][j] + fy * (g[i][j + 1] - g[i][j])
+        hi = g[i + 1][j] + fy * (g[i + 1][j + 1] - g[i + 1][j])
+    else:
+        lo = g[i, j] + fy * (g[i, j + 1] - g[i, j])
+        hi = g[i + 1, j] + fy * (g[i + 1, j + 1] - g[i + 1, j])
+    return lo + fx * (hi - lo)
+
+
+def _extend(grid, node_class, phase):
+    """Return grid restricted to one phase (0 solid, 1 liquid) and continued past it.
+
+    Along every pressure row, the _EXTEND nodes beyond the last node of the phase
+    take the linear extrapolation in log10 T of its two outermost nodes. All other
+    nodes of the other phase, and missing nodes, are NaN.
+    """
+    out = np.where(node_class == phase, grid, np.nan)
+    n_t = grid.shape[1]
+    for i, row in enumerate(node_class):
+        own = np.flatnonzero(row == phase)
+        if not own.size or not (row == 1 - phase).any():
+            continue
+        # The solid side is continued upward in T, the liquid side downward.
+        edge, step = (own.max(), 1) if phase == 0 else (own.min(), -1)
+        inner = edge - step
+        if not 0 <= inner < n_t or row[inner] != phase:
+            continue
+        slope = grid[i, edge] - grid[i, inner]
+        for k in range(1, _EXTEND + 1):
+            if 0 <= edge + k * step < n_t:
+                out[i, edge + k * step] = grid[i, edge] + k * slope
+    return out
 
 
 def _uniform_step(axis):
