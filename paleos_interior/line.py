@@ -259,7 +259,8 @@ def _rejection_message(line, n_line):
         T, _, R_lim = max(too_large, key=lambda x: x[2])
         deficit = 1.0 - R_lim / line.radius
         parts.append(
-            f'At {_span([x[0] for x in too_large])} even a pure MgSiO3 planet is too small: '
+            f'At {_span([x[0] for x in too_large])} even a pure MgSiO3 planet is too '
+            'small: '
             f'at T_pot = {T:.0f} K it has R = {R_lim / R_EARTH:.4f} Earth radii, '
             f'{100 * deficit:.1f}% below the measured radius. There, the measured radius '
             'needs material less dense than MgSiO3, such as an atmosphere or a volatile '

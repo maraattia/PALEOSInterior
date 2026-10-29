@@ -231,7 +231,7 @@ def integrate(
 
 
 def _profile(M, cmf, T_pot, dT_cmb, tables, n_radial, grain_size, guess=None):
-    """Build the Profile of a planet of mass M (kg), starting the radius solve at guess (m)."""
+    """Return the Profile of a planet of mass M (kg), solving its radius from guess (m)."""
     if guess is None:
         guess = _solve_radius(M, cmf, T_pot, dT_cmb, tables)
     R = _solve_radius(M, cmf, T_pot, dT_cmb, tables, TOL_PROFILE, guess=guess, xtol=0.01)
