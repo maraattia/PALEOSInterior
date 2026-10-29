@@ -17,6 +17,11 @@ dependencies = [
 
 [project.optional-dependencies]
 develop = ["ruff"]
+examples = [
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+    "jupyterlab>=4.0",
+]
 
 [project.urls]
 Repository = "https://github.com/maraattia/PALEOSInterior"
