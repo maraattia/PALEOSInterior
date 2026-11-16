@@ -4,8 +4,9 @@ The structure equations are integrated inward from the surface,
 
     dm/dr = 4 pi r^2 rho,   dP/dr = -G m rho / r^2,   dT/dr = nabla_ad (T / P) dP/dr,
 
-starting from (M, P_SURFACE, T_pot). The mantle gives way to the core where the
-enclosed mass falls to CMF * M. The radius R is the root of the mass left at
+starting from (M, P_surface, T_pot). P_surface is 1 bar, or the base pressure of
+an envelope that the planet sits under. The mantle gives way to the core where
+the enclosed mass falls to CMF * M. The radius R is the root of the mass left at
 R_INNER, found by bracketing and Brent's method.
 """
 
@@ -93,7 +94,7 @@ def _layers(mass, cmf, tables):
     return layers
 
 
-def _integrate(R, mass, cmf, T_pot, dT_cmb, tables, tol, dense=False):
+def _integrate(R, mass, cmf, T_pot, dT_cmb, tables, tol, dense=False, P_surface=None):
     """Integrate inward from radius R.
 
     Returns (residual, solutions). The residual is m(R_INNER) / M when mass is
@@ -102,7 +103,8 @@ def _integrate(R, mass, cmf, T_pot, dT_cmb, tables, tol, dense=False):
     -(4 pi / 3) rho r0^3 / M. Both branches are mass excesses, so the residual
     is close to linear in R across the root.
     """
-    y0 = [mass, P_SURFACE, T_pot]
+    # None reads P_SURFACE at call time, so a caller that overrides it still sets the start.
+    y0 = [mass, P_SURFACE if P_surface is None else P_surface, T_pot]
     r_top = R
     solutions = []
     layers = _layers(mass, cmf, tables)
@@ -185,7 +187,10 @@ def _secant(residual, R, xtol, max_steps=30):
     return None
 
 
-def _solve_radius(mass, cmf, T_pot, dT_cmb, tables, tol=TOL_SEARCH, guess=None, xtol=10.0):
+def _solve_radius(
+    mass, cmf, T_pot, dT_cmb, tables, tol=TOL_SEARCH, guess=None, xtol=10.0,
+    P_surface=None,
+):  # fmt: skip
     """Return the radius (m) of a planet of the given mass (kg), CMF, and T_pot (K).
 
     A secant iteration from ``guess`` (default: a scaling estimate) converges in
@@ -195,7 +200,7 @@ def _solve_radius(mass, cmf, T_pot, dT_cmb, tables, tol=TOL_SEARCH, guess=None, 
     start = guess or _radius_guess(mass, cmf, T_pot)
 
     def residual(R):
-        value, _ = _integrate(R, mass, cmf, T_pot, dT_cmb, tables, tol)
+        value, _ = _integrate(R, mass, cmf, T_pot, dT_cmb, tables, tol, P_surface=P_surface)
         return value
 
     R = _secant(residual, start, xtol)
@@ -211,16 +216,21 @@ def _solve_radius(mass, cmf, T_pot, dT_cmb, tables, tol=TOL_SEARCH, guess=None, 
 
 
 def integrate(
-    mass, cmf, T_pot, dT_cmb=0.0, tables=None, n_radial=1000, grain_size=GRAIN_SIZE
-):
+    mass, cmf, T_pot, dT_cmb=0.0, tables=None, n_radial=1000, grain_size=GRAIN_SIZE,
+    P_surface=P_SURFACE,
+):  # fmt: skip
     """Return the converged ``Profile`` of one planet.
 
-    ``mass`` is in Earth masses, ``T_pot`` is the 1 bar mantle potential
-    temperature (K), and ``dT_cmb`` is a temperature jump added at the
-    core-mantle boundary (K). ``grain_size`` (m) sets the silicate viscosities
-    and the diffusion-creep branch of solid iron. Profiles run from the surface
-    to ``R_INNER``. Raises ``OutsideTablesError`` when the adiabat enters a
-    region the PALEOS tables do not cover.
+    ``mass`` is the rock and iron mass in Earth masses, ``T_pot`` is the mantle
+    temperature (K) at the surface pressure ``P_surface`` (Pa), and ``dT_cmb``
+    is a temperature jump added at the core-mantle boundary (K). At the default
+    P_surface of 1 bar, T_pot is the mantle potential temperature. Under an
+    envelope, P_surface is the pressure at its base and T_pot the temperature
+    at the top of the mantle; the envelope itself is not modeled. ``grain_size``
+    (m) sets the silicate viscosities and the diffusion-creep branch of solid
+    iron. Profiles run from the surface to ``R_INNER``. Raises
+    ``OutsideTablesError`` when the adiabat enters a region the PALEOS tables
+    do not cover.
     """
     if not 0.0 <= cmf <= 1.0:
         raise ValueError(f'CMF must lie in [0, 1], got {cmf}')
@@ -228,15 +238,31 @@ def integrate(
         raise ValueError(f'grain_size must be positive, got {grain_size}')
     tables = tables or load_tables()
     _check_inputs(tables, mass=mass, T_pot=T_pot, count=('n_radial', n_radial, 2))
-    return _profile(mass * M_EARTH, cmf, T_pot, dT_cmb, tables, n_radial, grain_size)
+    outer = tables.mgsio3 if cmf < 1.0 else tables.iron
+    lo, hi = (10.0**x for x in outer.log_p_range)
+    if not lo * (1.0 - 1e-9) <= P_surface <= hi * (1.0 + 1e-9):
+        raise ValueError(
+            f'P_surface must lie between {lo:g} and {hi:g} Pa, got {P_surface}'
+        )
+    return _profile(
+        mass * M_EARTH, cmf, T_pot, dT_cmb, tables, n_radial, grain_size,
+        P_surface=P_surface,
+    )  # fmt: skip
 
 
-def _profile(M, cmf, T_pot, dT_cmb, tables, n_radial, grain_size, guess=None):
+def _profile(
+    M, cmf, T_pot, dT_cmb, tables, n_radial, grain_size, guess=None, P_surface=None
+):
     """Return the Profile of a planet of mass M (kg), solving its radius from guess (m)."""
     if guess is None:
-        guess = _solve_radius(M, cmf, T_pot, dT_cmb, tables)
-    R = _solve_radius(M, cmf, T_pot, dT_cmb, tables, TOL_PROFILE, guess=guess, xtol=0.01)
-    _, solutions = _integrate(R, M, cmf, T_pot, dT_cmb, tables, TOL_PROFILE, dense=True)
+        guess = _solve_radius(M, cmf, T_pot, dT_cmb, tables, P_surface=P_surface)
+    R = _solve_radius(
+        M, cmf, T_pot, dT_cmb, tables, TOL_PROFILE, guess=guess, xtol=0.01,
+        P_surface=P_surface,
+    )  # fmt: skip
+    _, solutions = _integrate(
+        R, M, cmf, T_pot, dT_cmb, tables, TOL_PROFILE, dense=True, P_surface=P_surface
+    )
 
     tops = [R] + [sol.t_events[0][0] for _, _, sol in solutions[:-1]]
     bottoms = tops[1:] + [R_INNER]
@@ -268,6 +294,7 @@ def _profile(M, cmf, T_pot, dT_cmb, tables, n_radial, grain_size, guess=None):
         dT_cmb=dT_cmb,
         columns=columns,
         grain_size=grain_size,
+        P_surface=P_SURFACE if P_surface is None else P_surface,
     )
     if len(solutions) == 2:
         mantle = solutions[0][2]

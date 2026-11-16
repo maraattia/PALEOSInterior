@@ -59,6 +59,10 @@ Mass and radius take a single value, a `(value, sigma)` pair, or `(value, sigma_
 
 $T_\mathrm{pot}$ must lie between 300 K and $10^{5}$ K, the temperature range of the tables. The PALEOS MgSiO₃ table has no data at low pressure above about 4800 K, and an adiabat that enters that region raises `OutsideTablesError`, a subclass of `NoSolutionError`. For planets of a few Earth masses this caps $T_\mathrm{pot}$ near 4750 K. `compatible_line` keeps the values of $T_\mathrm{pot}$ that can be solved and lists the others as rejected.
 
+### Under an envelope
+
+`integrate` takes a surface pressure `P_surface` in Pa, 1 bar by default. Set to the pressure at the base of a gas or volatile envelope, it builds the rock and iron part of a planet that sits under one: the adiabat starts at `P_surface`, `T_pot` is the temperature at the top of the mantle, and `mass` is the mass of rock and iron alone. The envelope is not modeled, so its structure, and the base pressure that makes its mass add up to the planet's, come from a separate model. `P_surface` must lie within the pressure range of the tables, $10^{5}$ to $10^{14}$ Pa. `compatible_line` and `interior_profiles` keep the 1 bar surface.
+
 ### Measurement uncertainties
 
 The profiles sit on the line at the nominal mass and radius. The uncertainties enter through two more lines, at the corners of the 1 $\sigma$ box with the highest and lowest bulk density. At fixed $T_\mathrm{pot}$ , $\mathrm{CMF}$ rises with mass and falls with radius, so these corners bound the $\mathrm{CMF}$ of every mass and radius in the box. This holds at every point of a 5 by 5 grid across the boxes of Kepler-80 d and e at $T_\mathrm{pot}$ from 1000 to 4500 K, and is expected wherever the radius grows with mass at fixed composition. The uncertainties are not propagated into the profiles.
@@ -74,10 +78,10 @@ If no Fe-MgSiO₃ interior reproduces the mass and radius anywhere in the `T_pot
 | `interior_profiles(mass, radius, T_pot, n_profiles=20, dT_cmb=0.0, n_line=12, n_radial=1000, table_dir=None, grain_size=1e-3)` | `InteriorResult` with `line`, `envelope`, `profiles`, `summary()`, and `write(folder)` |
 | `compatible_line(mass, radius, T_pot, dT_cmb=0.0, n_line=12, tables=None)` | `CompatibleLine` with arrays `T_pot`, `cmf`, `R_cmb`, `P_cmb`, `T_cmb`, the solvable interval `T_range`, `cmf_at(T_pot)`, and `sample(n)` |
 | `compatible_envelope(mass, radius, T_pot, dT_cmb=0.0, n_line=12, tables=None)` | dict of the `'dense'` and `'light'` corner lines |
-| `integrate(mass, cmf, T_pot, dT_cmb=0.0, tables=None, n_radial=1000, grain_size=1e-3)` | one `Profile` at fixed mass, $\mathrm{CMF}$ , and $T_\mathrm{pot}$ |
+| `integrate(mass, cmf, T_pot, dT_cmb=0.0, tables=None, n_radial=1000, grain_size=1e-3, P_surface=1e5)` | one `Profile` at fixed mass, $\mathrm{CMF}$ , and $T_\mathrm{pot}$ , starting at `P_surface` (Pa) |
 | `load_tables(table_dir=None)` | the iron and MgSiO₃ tables, to pass as `tables=` and avoid reloading |
 
-A `Profile` exposes each column below as an array attribute (`p.rho`, `p.V_P`) and the scalars `mass`, `radius`, `cmf`, `T_pot`, `dT_cmb`, `grain_size`, `R_cmb`, `P_cmb`, `T_cmb`, `P_center`, and `T_center` in SI units. `P_center` and `T_center` are the values at $r = 5$ km.
+A `Profile` exposes each column below as an array attribute (`p.rho`, `p.V_P`) and the scalars `mass`, `radius`, `cmf`, `T_pot`, `dT_cmb`, `grain_size`, `P_surface`, `R_cmb`, `P_cmb`, `T_cmb`, `P_center`, and `T_center` in SI units. `P_center` and `T_center` are the values at $r = 5$ km.
 
 ## Output files
 
@@ -137,7 +141,7 @@ Far below the melting temperature, the Arrhenius laws of the solids give viscosi
 - With a pure iron core, an Earth-mass planet with $\mathrm{CMF} = 0.325$ at $T_\mathrm{pot} = 1600$ K has a radius of 6334 km, 0.6% below Earth's mean radius, and its core is solid throughout. Earth's core is less dense and partly liquid because light elements lower its density and its melting point.
 - There are no water, ice, or atmospheric layers, so the package answers whether a planet can be rocky and, if it can, how its interior may look.
 - The temperature profile is adiabatic everywhere. A conductive lid or a stagnant-lid mantle is not modeled.
-- The surface pressure is 1 bar.
+- The surface pressure is 1 bar, except in `integrate`, which can start under an envelope whose base pressure is given.
 
 ## Citing
 

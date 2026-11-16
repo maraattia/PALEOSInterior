@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .constants import G
+from .constants import P_SURFACE, G
 
 COLUMNS = (
     ('r', 'm'),
@@ -48,6 +48,7 @@ class Profile:
     R_cmb: float = np.nan
     P_cmb: float = np.nan
     T_cmb: float = np.nan
+    P_surface: float = P_SURFACE
 
     def __getattr__(self, name):
         columns = self.__dict__.get('columns', {})
