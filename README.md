@@ -61,7 +61,7 @@ $T_\mathrm{pot}$ must lie between 300 K and $10^{5}$ K, the temperature range of
 
 ### Under an envelope
 
-`integrate` takes a surface pressure `P_surface` in Pa, 1 bar by default. Set to the pressure at the base of a gas or volatile envelope, it builds the rock and iron part of a planet that sits under one: the adiabat starts at `P_surface`, `T_pot` is the temperature at the top of the mantle, and `mass` is the mass of rock and iron alone. The envelope is not modeled, so its structure, and the base pressure that makes its mass add up to the planet's, come from a separate model. `P_surface` must lie within the pressure range of the tables, $10^{5}$ to $10^{14}$ Pa. `compatible_line` and `interior_profiles` keep the 1 bar surface.
+`integrate` takes a surface pressure `P_surface` in Pa, 1 bar by default. Set to the pressure at the base of a gas or volatile envelope, it builds the rock and iron part of a planet that sits under one: the adiabat starts at `P_surface`, `T_pot` is the temperature at the top of the mantle, and `mass` is the mass of rock and iron alone. `solve_radius` returns the radius alone, for the root finding that fits the envelope, and `integrate` the profile once the base pressure is known. The envelope is not modeled, so its structure, and the base pressure that makes its mass add up to the planet's, come from a separate model. `P_surface` must lie within the pressure range of the tables, $10^{5}$ to $10^{14}$ Pa. `compatible_line` and `interior_profiles` keep the 1 bar surface.
 
 ### Measurement uncertainties
 
@@ -79,6 +79,7 @@ If no Fe-MgSiO₃ interior reproduces the mass and radius anywhere in the `T_pot
 | `compatible_line(mass, radius, T_pot, dT_cmb=0.0, n_line=12, tables=None)` | `CompatibleLine` with arrays `T_pot`, `cmf`, `R_cmb`, `P_cmb`, `T_cmb`, the solvable interval `T_range`, `cmf_at(T_pot)`, and `sample(n)` |
 | `compatible_envelope(mass, radius, T_pot, dT_cmb=0.0, n_line=12, tables=None)` | dict of the `'dense'` and `'light'` corner lines |
 | `integrate(mass, cmf, T_pot, dT_cmb=0.0, tables=None, n_radial=1000, grain_size=1e-3, P_surface=1e5)` | one `Profile` at fixed mass, $\mathrm{CMF}$ , and $T_\mathrm{pot}$ , starting at `P_surface` (Pa) |
+| `solve_radius(mass, cmf, T_pot, dT_cmb=0.0, tables=None, P_surface=1e5, guess=None)` | the radius (m) alone, to about 20 m, from an optional starting `guess` in Earth radii. In a loop over nearby planets it runs about 20 times faster than `integrate` |
 | `load_tables(table_dir=None)` | the iron and MgSiO₃ tables, to pass as `tables=` and avoid reloading |
 
 A `Profile` exposes each column below as an array attribute (`p.rho`, `p.V_P`) and the scalars `mass`, `radius`, `cmf`, `T_pot`, `dT_cmb`, `grain_size`, `P_surface`, `R_cmb`, `P_cmb`, `T_cmb`, `P_center`, and `T_center` in SI units. `P_center` and `T_center` are the values at $r = 5$ km.

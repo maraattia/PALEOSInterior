@@ -215,6 +215,40 @@ def _solve_radius(
     return brentq(guarded, lo, hi, xtol=xtol, rtol=1e-12)
 
 
+def _check_surface(tables, cmf, P_surface):
+    """Raise ValueError for a CMF outside [0, 1] or P_surface off the outer table."""
+    if not 0.0 <= cmf <= 1.0:
+        raise ValueError(f'CMF must lie in [0, 1], got {cmf}')
+    outer = tables.mgsio3 if cmf < 1.0 else tables.iron
+    lo, hi = (10.0**x for x in outer.log_p_range)
+    if not lo * (1.0 - 1e-9) <= P_surface <= hi * (1.0 + 1e-9):
+        raise ValueError(
+            f'P_surface must lie between {lo:g} and {hi:g} Pa, got {P_surface}'
+        )
+
+
+def solve_radius(
+    mass, cmf, T_pot, dT_cmb=0.0, tables=None, P_surface=P_SURFACE, guess=None
+):
+    """Return the radius (m) of one planet, without building its profile.
+
+    The arguments are those of ``integrate``. ``guess`` (Earth radii) starts the
+    search, for instance from the previous radius in a loop over nearby planets.
+    The radius agrees with that of ``integrate`` to about 20 m. Raises
+    ``NoSolutionError`` when the search fails and ``OutsideTablesError`` when
+    the adiabat enters a region the PALEOS tables do not cover.
+    """
+    tables = tables or load_tables()
+    _check_inputs(tables, mass=mass, T_pot=T_pot)
+    _check_surface(tables, cmf, P_surface)
+    if guess is not None and not guess > 0.0:
+        raise ValueError(f'guess must be positive, got {guess}')
+    start = None if guess is None else guess * R_EARTH
+    return _solve_radius(
+        mass * M_EARTH, cmf, T_pot, dT_cmb, tables, guess=start, P_surface=P_surface
+    )
+
+
 def integrate(
     mass, cmf, T_pot, dT_cmb=0.0, tables=None, n_radial=1000, grain_size=GRAIN_SIZE,
     P_surface=P_SURFACE,
@@ -232,18 +266,11 @@ def integrate(
     ``OutsideTablesError`` when the adiabat enters a region the PALEOS tables
     do not cover.
     """
-    if not 0.0 <= cmf <= 1.0:
-        raise ValueError(f'CMF must lie in [0, 1], got {cmf}')
     if not grain_size > 0.0:
         raise ValueError(f'grain_size must be positive, got {grain_size}')
     tables = tables or load_tables()
     _check_inputs(tables, mass=mass, T_pot=T_pot, count=('n_radial', n_radial, 2))
-    outer = tables.mgsio3 if cmf < 1.0 else tables.iron
-    lo, hi = (10.0**x for x in outer.log_p_range)
-    if not lo * (1.0 - 1e-9) <= P_surface <= hi * (1.0 + 1e-9):
-        raise ValueError(
-            f'P_surface must lie between {lo:g} and {hi:g} Pa, got {P_surface}'
-        )
+    _check_surface(tables, cmf, P_surface)
     return _profile(
         mass * M_EARTH, cmf, T_pot, dT_cmb, tables, n_radial, grain_size,
         P_surface=P_surface,

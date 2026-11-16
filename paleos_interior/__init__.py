@@ -8,7 +8,7 @@ __version__ = '1.0.0'
 
 from .line import CompatibleLine, compatible_envelope, compatible_line
 from .result import InteriorResult, interior_profiles
-from .structure import NoSolutionError, OutsideTablesError, integrate
+from .structure import NoSolutionError, OutsideTablesError, integrate, solve_radius
 from .tables import load_tables
 
 __all__ = [
@@ -21,4 +21,5 @@ __all__ = [
     'integrate',
     'interior_profiles',
     'load_tables',
+    'solve_radius',
 ]
